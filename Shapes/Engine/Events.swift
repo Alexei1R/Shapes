@@ -55,9 +55,6 @@ final class EventManager: ObservableObject {
             previousLocation = .zero
         }
         
-#if DEBUG
-        logEvent()
-#endif
     }
     
     func endProcess() {
@@ -65,10 +62,6 @@ final class EventManager: ObservableObject {
         previousLocation = .zero
     }
     
-    private func logEvent() {
-        guard let event = currentEvent else { return }
-        print("Delta: (x: \(String(format: "%.2f", event.delta.x)), y: \(String(format: "%.2f", event.delta.y)))")
-    }
 }
 
 struct EventHandlingViewModifier: ViewModifier {

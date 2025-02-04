@@ -5,15 +5,17 @@
 //  Created by rusu alexei on 04.02.2025.
 //
 
-import Foundation
-import MetalKit
+
 import SwiftUI
-
-
+import MetalKit
 
 struct ScanView: UIViewRepresentable {
+    
     private let drawable: Drawable
     private let device: MTLDevice?
+    
+
+    
     
     init() {
         guard let engine = Engine.shared else {
@@ -24,30 +26,32 @@ struct ScanView: UIViewRepresentable {
         self.drawable = Drawable(device: device!)
     }
     
+    func makeCoordinator() -> Coordinator {
+        Coordinator(device: device!)
+    }
+    
     func makeUIView(context: Context) -> MTKView {
-        let view = MTKView()
-        guard let device = device else {
-            fatalError("Metal device is nil")
-        }
+        let mtkView = MTKView(frame: .zero, device: device)
+        mtkView.delegate = context.coordinator.drawable
         
-        view.device = device
-        view.delegate = drawable
-        view.enableSetNeedsDisplay = false
-        view.preferredFramesPerSecond = 30
-        view.isPaused = false
+        mtkView.preferredFramesPerSecond = 60
+        mtkView.isPaused = false
+        mtkView.enableSetNeedsDisplay = false
         
-        // Configure view
-        view.depthStencilPixelFormat = .depth32Float
-        view.clearDepth = 1.0
+        mtkView.colorPixelFormat = .bgra8Unorm       // Standard color format
+        mtkView.depthStencilPixelFormat = .depth32Float // Depth format for proper depth testing
         
-        let initialSize = view.bounds.size
-        drawable.mtkView(view, drawableSizeWillChange: initialSize)
-        return view
+        return mtkView
     }
     
     func updateUIView(_ uiView: MTKView, context: Context) {
-        // Handle updates if needed
+    }
+    
+    class Coordinator {
+        let drawable: Drawable
+        
+        init(device: MTLDevice) {
+            drawable = Drawable(device: device)
+        }
     }
 }
-
-

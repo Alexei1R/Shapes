@@ -8,6 +8,17 @@
 import Foundation
 import Metal
 
+protocol EngineComponent {
+    func initialize()
+    func update(deltaTime: Float)
+}
+
+protocol Renderable {
+    func render(commandEncoder: MTLRenderCommandEncoder)
+}
+
+
+
 
 class Engine{
  
@@ -22,8 +33,12 @@ class Engine{
         self.device = mtlDevice
         
         
-        
     }
+    
+    
+    
+    
+    
     
     
 }

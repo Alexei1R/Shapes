@@ -8,13 +8,11 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var eventManager = EventManager()
-    
+    @StateObject private var eventManager = EventManager.shared
     
     var body: some View {
         ZStack {
             ScanView()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .edgesIgnoringSafeArea(.all)
                 .handleEvents(using: eventManager)
             
@@ -29,6 +27,3 @@ struct ContentView: View {
     
 }
 
-#Preview {
-    ContentView()
-}
