@@ -45,4 +45,3 @@ fragment float4 fragment_main(VertexOut in [[stage_in]]) {
 }
 
 
-

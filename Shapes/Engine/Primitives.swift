@@ -7,7 +7,16 @@
 
 import Foundation
 
+struct Vertex {
+    let position: vec3f
+    let color: vec4f
+}
+
+
+
 struct CubeMesh {
+    
+    
     
     
     // Define cube vertices (each face has a different color)
@@ -51,17 +60,11 @@ struct CubeMesh {
     
     // Define indices for the cube (6 faces, 2 triangles each)
     static let indices: [UInt16] = [
-        // Front face
         0,  1,  2,  2,  3,  0,
-        // Back face
         4,  5,  6,  6,  7,  4,
-        // Top face
         8,  9,  10, 10, 11, 8,
-        // Bottom face
         12, 13, 14, 14, 15, 12,
-        // Right face
         16, 17, 18, 18, 19, 16,
-        // Left face
         20, 21, 22, 22, 23, 20
     ]
 }

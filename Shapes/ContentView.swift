@@ -7,6 +7,9 @@
 
 import SwiftUI
 
+
+
+
 struct ContentView: View {
     @StateObject private var eventManager = EventManager.shared
     

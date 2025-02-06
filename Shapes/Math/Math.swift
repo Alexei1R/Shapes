@@ -8,6 +8,9 @@
 import Foundation
 import simd
 
+
+public typealias vec2i = SIMD2<Int>
+public typealias vec3i = SIMD3<Int>
 public typealias vec2f = SIMD2<Float>
 public typealias vec3f = SIMD3<Float>
 public typealias vec4f = SIMD4<Float>
