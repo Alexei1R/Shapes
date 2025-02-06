@@ -12,6 +12,54 @@ import MetalKit
 
 
 
+
+
+struct MeshData {
+    var vertices: [ModelVertex]
+    var indices: [UInt32]
+}
+
+func extractMeshData(from mdlMesh: MDLMesh) -> MeshData? {
+    guard let vertexBuffer = mdlMesh.vertexBuffers.first else {
+        print("No vertex buffer found!")
+        return nil
+    }
+    
+    let vertexData = vertexBuffer.map().bytes.assumingMemoryBound(to: Float.self)
+    let vertexCount = mdlMesh.vertexCount
+    
+    var vertices: [ModelVertex] = []
+    let stride = mdlMesh.vertexDescriptor.layouts[0] as! MDLVertexBufferLayout
+    
+    for i in 0..<vertexCount {
+        let base = (i * stride.stride) / MemoryLayout<Float>.stride
+        
+        let position = SIMD3<Float>(vertexData[base + 0], vertexData[base + 1], vertexData[base + 2])
+        let normal = SIMD3<Float>(vertexData[base + 3], vertexData[base + 4], vertexData[base + 5])
+        let texCoord = SIMD2<Float>(vertexData[base + 6], vertexData[base + 7])
+        let tangent = SIMD3<Float>(vertexData[base + 8], vertexData[base + 9], vertexData[base + 10])
+        let bitangent = SIMD3<Float>(vertexData[base + 11], vertexData[base + 12], vertexData[base + 13])
+        
+        vertices.append(ModelVertex(position: position, normal: normal, textureCoordinate: texCoord, tangent: tangent, bitangent: bitangent))
+    }
+    
+    var indices: [UInt32] = []
+    
+    for submesh in mdlMesh.submeshes as! [MDLSubmesh] {
+        let indexBuffer = submesh.indexBuffer
+        let indexData = indexBuffer.map().bytes.assumingMemoryBound(to: UInt32.self)
+        
+        let indexCount = submesh.indexCount
+        for i in 0..<indexCount {
+            indices.append(indexData[i])
+        }
+    }
+    
+    return MeshData(vertices: vertices, indices: indices)
+}
+
+
+
 class Drawable: NSObject {
     let device: MTLDevice
     var commandQueue: MTLCommandQueue!
@@ -34,8 +82,12 @@ class Drawable: NSObject {
         var time: Float
     }
     
-    var vertexBuffer: MetalBuffer<Vertex>!
-    var indexBuffer: MetalBuffer<UInt16>!
+//    var vertexBuffer: MetalBuffer<Vertex>!
+//    var indexBuffer: MetalBuffer<UInt16>!
+    
+    var vertexBuffer: MetalBuffer<ModelVertex>!
+    var indexBuffer: MetalBuffer<UInt32>!
+
     var uniformsBuffer: MetalBuffer<Uniforms>!
     let materialManager = MaterialManager()
     
@@ -55,6 +107,33 @@ class Drawable: NSObject {
     }
     
     
+//    private func loadMesh(){
+//        if let modelPath = Bundle.main.path(forResource: "girl", ofType: "usdc") {
+//            let modelURL = URL(fileURLWithPath: modelPath)
+//            let model3D = Model3D()
+//            
+//            do {
+//                try model3D.load(from: modelURL)
+//                model3D.printAllComponents()
+//                
+//                
+//                if let firstMesh = model3D.meshes.first {
+//                    if let meshData = extractMeshData(from: firstMesh) {
+//                        print("Extracted \(meshData.vertices.count) vertices and \(meshData.indices.count) indices")
+//                    }
+//                }
+//                
+//                
+//                girlModel = model3D
+//                
+//            } catch {
+//                print("Failed to load model: \(error)")
+//            }
+//        } else {
+//            print("Model file not found in bundle.")
+//        }
+//    }
+    
     private func loadMesh(){
         if let modelPath = Bundle.main.path(forResource: "girl", ofType: "usdc") {
             let modelURL = URL(fileURLWithPath: modelPath)
@@ -63,7 +142,28 @@ class Drawable: NSObject {
             do {
                 try model3D.load(from: modelURL)
                 model3D.printAllComponents()
+                
+                if let firstMesh = model3D.meshes.first,
+                   let meshData = extractMeshData(from: firstMesh) {
+                    
+                    print("Extracted \(meshData.vertices.count) vertices and \(meshData.indices.count) indices")
+                    
+                    // Crearea bufferelelor Metal
+                    vertexBuffer = MetalBuffer<ModelVertex>(
+                        device: device,
+                        elements: meshData.vertices,
+                        usage: .storageShared
+                    )
+                    
+                    indexBuffer = MetalBuffer<UInt32>(
+                        device: device,
+                        elements: meshData.indices,
+                        usage: .storageShared
+                    )
+                }
+                
                 girlModel = model3D
+                
             } catch {
                 print("Failed to load model: \(error)")
             }
@@ -72,15 +172,16 @@ class Drawable: NSObject {
         }
     }
 
+
     private func setupCamera() {
         camera = Camera(
-            position: vec3f(0, 1, -5),
+            position: vec3f(0, 1, -500),
             target: vec3f(0, 0, 0),
             up: vec3f(0, 1, 0),
             fieldOfView: Float.pi / 3,
             aspectRatio: 1.0,
             nearPlane: 0.1,
-            farPlane: 100.0
+            farPlane: 10000.0
         )
         let uniforms = Uniforms(
             viewProjectionMatrix: camera.getViewProjectionMatrix(),
@@ -138,9 +239,21 @@ class Drawable: NSObject {
         }
 
 
+//        let vertexLayout = BufferLayout(
+//            elements: BufferElement(type: .float3, name: "position"),
+//            BufferElement(type: .float4, name: "color")
+//        )
+        
+        
+        
         let vertexLayout = BufferLayout(
-            elements: BufferElement(type: .float3, name: "position"),
-            BufferElement(type: .float4, name: "color")
+            elements: [
+                BufferElement(type: .float3, name: "position"),
+                BufferElement(type: .float3, name: "normal"),
+                BufferElement(type: .float2, name: "textureCoordinate"),
+                BufferElement(type: .float3, name: "tangent"),
+                BufferElement(type: .float3, name: "bitangent")
+            ]
         )
         pipelineDescriptor.vertexDescriptor = vertexLayout.metalVertexDescriptor(bufferIndex: 0)
         pipelineDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
@@ -155,16 +268,16 @@ class Drawable: NSObject {
     }
 
     private func createBuffers() {
-        vertexBuffer = MetalBuffer<Vertex>(
-            device: device,
-            elements: CubeMesh.vertices,
-            usage: .storageShared
-        )
-        indexBuffer = MetalBuffer<UInt16>(
-            device: device,
-            elements: CubeMesh.indices,
-            usage: .storageShared
-        )
+//        vertexBuffer = MetalBuffer<Vertex>(
+//            device: device,
+//            elements: CubeMesh.vertices,
+//            usage: .storageShared
+//        )
+//        indexBuffer = MetalBuffer<UInt16>(
+//            device: device,
+//            elements: CubeMesh.indices,
+//            usage: .storageShared
+//        )
     }
 }
 
@@ -203,14 +316,25 @@ extension Drawable: MTKViewDelegate {
         renderEncoder.setDepthStencilState(depthStencilState)
         uniformsBuffer.bind(to: renderEncoder, type: .vertex, index: 1)
         vertexBuffer.bind(to: renderEncoder, type: .vertex, index: 0)
+//        renderEncoder.drawIndexedPrimitives(
+//            type: .triangle,
+//            indexCount: CubeMesh.indices.count,
+//            indexType: .uint16,
+//            indexBuffer: indexBuffer.raw()!,
+//            indexBufferOffset: 0
+//        )
+
+        
         renderEncoder.drawIndexedPrimitives(
             type: .triangle,
-            indexCount: CubeMesh.indices.count,
-            indexType: .uint16,
+            indexCount: indexBuffer.count,
+            indexType: .uint32,
             indexBuffer: indexBuffer.raw()!,
             indexBufferOffset: 0
         )
 
+        
+        
         renderEncoder.endEncoding()
         commandBuffer.present(drawableTarget)
         commandBuffer.commit()
@@ -268,3 +392,11 @@ extension Drawable: MTKViewDelegate {
 //        frameGraph.execute()
 //    }
 //}
+
+
+
+
+
+
+
+

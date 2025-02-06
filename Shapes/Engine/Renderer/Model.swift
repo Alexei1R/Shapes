@@ -85,6 +85,8 @@ struct ModelLight {
 }
 
 class Model3D {
+    
+    
     private(set) var asset: MDLAsset?
     private(set) var meshes: [MDLMesh] = []
     private(set) var textures: [ModelTexture] = []
@@ -141,7 +143,7 @@ class Model3D {
         }
         
         
-        
+        print("///////////////////////////////////////////////////////////////////////////////////////")
         
         try loadMeshes()
         loadSkeleton()
