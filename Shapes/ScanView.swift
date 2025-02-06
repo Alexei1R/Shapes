@@ -9,27 +9,19 @@
 import SwiftUI
 import MetalKit
 
-
-
-
 struct ScanView: UIViewRepresentable {
     
-    private let drawable: Drawable
     private let device: MTLDevice?
-    
-
-    
     
     init() {
         guard let engine = Engine.shared else {
             fatalError("Failed to create Metal device")
         }
-        
         self.device = engine.device
-        self.drawable = Drawable(device: device!)
     }
     
     func makeCoordinator() -> Coordinator {
+        // Create only one instance of Drawable here
         Coordinator(device: device!)
     }
     
@@ -41,8 +33,8 @@ struct ScanView: UIViewRepresentable {
         mtkView.isPaused = false
         mtkView.enableSetNeedsDisplay = false
         
-        mtkView.colorPixelFormat = .bgra8Unorm       // Standard color format
-        mtkView.depthStencilPixelFormat = .depth32Float // Depth format for proper depth testing
+        mtkView.colorPixelFormat = .bgra8Unorm
+        mtkView.depthStencilPixelFormat = .depth32Float 
         
         return mtkView
     }

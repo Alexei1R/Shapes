@@ -1,14 +1,6 @@
-//
-//  Model.swift
-//  Shapes
-//
-//  Created by Alexei1R on 2025-02-06 07:35:41
-//
-
 import ModelIO
 import MetalKit
 
-// MARK: - Errors
 enum ModelLoaderError: Error {
     case failedToLoadAsset(String)
     case invalidMesh
@@ -18,13 +10,20 @@ enum ModelLoaderError: Error {
     case animationError(String)
 }
 
-// MARK: - Model Components
 struct ModelVertex {
     var position: vec3f
     var normal: vec3f
     var textureCoordinate: vec2f
     var tangent: vec3f
     var bitangent: vec3f
+    
+    static func == (lhs: ModelVertex, rhs: ModelVertex) -> Bool {
+            return lhs.position == rhs.position &&
+                   lhs.normal == rhs.normal &&
+                   lhs.textureCoordinate == rhs.textureCoordinate &&
+                   lhs.tangent == rhs.tangent &&
+                   lhs.bitangent == rhs.bitangent
+        }
 }
 
 struct ModelTexture {
@@ -85,7 +84,6 @@ struct ModelLight {
     }
 }
 
-// MARK: - Main Model Class
 class Model3D {
     private(set) var asset: MDLAsset?
     private(set) var meshes: [MDLMesh] = []
@@ -96,30 +94,24 @@ class Model3D {
     private(set) var cameras: [ModelCamera] = []
     private(set) var lights: [ModelLight] = []
     
-    // Asset loading options
     private let vertexDescriptor: MDLVertexDescriptor = {
         let descriptor = MDLVertexDescriptor()
-        // Position
         descriptor.attributes[0] = MDLVertexAttribute(name: MDLVertexAttributePosition,
                                                         format: .float3,
                                                         offset: 0,
                                                         bufferIndex: 0)
-        // Normal
         descriptor.attributes[1] = MDLVertexAttribute(name: MDLVertexAttributeNormal,
                                                         format: .float3,
                                                         offset: 12,
                                                         bufferIndex: 0)
-        // Texture Coordinates
         descriptor.attributes[2] = MDLVertexAttribute(name: MDLVertexAttributeTextureCoordinate,
                                                         format: .float2,
                                                         offset: 24,
                                                         bufferIndex: 0)
-        // Tangent
         descriptor.attributes[3] = MDLVertexAttribute(name: MDLVertexAttributeTangent,
                                                         format: .float3,
                                                         offset: 32,
                                                         bufferIndex: 0)
-        // Bitangent
         descriptor.attributes[4] = MDLVertexAttribute(name: MDLVertexAttributeBitangent,
                                                         format: .float3,
                                                         offset: 44,
@@ -128,64 +120,49 @@ class Model3D {
         return descriptor
     }()
     
-    // MARK: - Loading Methods
+    // The load method loads the model and all components.
+    // It does NOT print out the summary. The summary is printed only when printAllComponents() is invoked.
     func load(from url: URL, preserveTopology: Bool = false) throws {
-        // Create asset allocator
         guard let device = MTLCreateSystemDefaultDevice() else {
             throw ModelLoaderError.failedToLoadAsset("No Metal device found.")
         }
         let allocator = MTKMeshBufferAllocator(device: device)
-        
-        // Load the asset with topology preservation if requested
         var error: NSError?
         asset = MDLAsset(url: url,
                          vertexDescriptor: vertexDescriptor,
                          bufferAllocator: allocator,
                          preserveTopology: preserveTopology,
                          error: &error)
-        
         if let error = error {
             throw ModelLoaderError.failedToLoadAsset(error.localizedDescription)
         }
-        
         guard let asset = asset else {
             throw ModelLoaderError.failedToLoadAsset(url.lastPathComponent)
         }
         
-        // Load textures automatically if available
-        if #available(iOS 11.0, *) {
-            asset.loadTextures()
-        }
         
-        // Load all components
+        
+        
         try loadMeshes()
-        loadSkeleton()      // Updated to use MDLSkeleton, prints only a subset of joints.
-        loadAnimations()    // Updated to support multiple types of animations.
+        loadSkeleton()
+        loadAnimations()
         loadCameras()
-        loadLights()        // Updated to support lights in multiple cases.
-        
-        // Print essential components for debugging (filtering output for brevity)
-        printAvailableComponents()
+        loadLights()
     }
     
     private func loadMeshes() throws {
-        // Explicitly cast each child object to MDLMesh
         if let foundMeshes = asset?.childObjects(of: MDLMesh.self) as? [MDLMesh] {
             meshes = foundMeshes
         } else {
             meshes = []
         }
-        
-        // For each mesh, check if normals and tangents exist otherwise generate them.
         for mesh in meshes {
             if let attributes = mesh.vertexDescriptor.attributes as? [MDLVertexAttribute] {
                 if !attributes.contains(where: { $0.name == MDLVertexAttributeNormal }) {
-                    print("DEBUG: Mesh \(mesh.name) missing normals. Adding normals.")
                     mesh.addNormals(withAttributeNamed: MDLVertexAttributeNormal,
                                     creaseThreshold: 0.5)
                 }
                 if !attributes.contains(where: { $0.name == MDLVertexAttributeTangent }) {
-                    print("DEBUG: Mesh \(mesh.name) missing tangents. Generating tangent basis.")
                     mesh.addTangentBasis(forTextureCoordinateAttributeNamed: MDLVertexAttributeTextureCoordinate,
                                            tangentAttributeNamed: MDLVertexAttributeTangent,
                                            bitangentAttributeNamed: MDLVertexAttributeBitangent)
@@ -203,11 +180,8 @@ class Model3D {
             let bindTransforms = firstSkeleton.jointBindTransforms
             let restTransforms = firstSkeleton.jointRestTransforms
             let jointCount = paths.count
-            
-            print("DEBUG: Found skeleton with \(jointCount) joints.")
-            
-            // Only print a subset of joints to avoid clutter
-            let maxJointsToPrint = 5
+            // We only store up to 5 joints for demonstration – adjust if you need all joints.
+            let maxJointsToStore = 5
             for i in 0..<jointCount {
                 let joint = ModelJoint(
                     name: (paths[i] as NSString).lastPathComponent,
@@ -216,121 +190,79 @@ class Model3D {
                     restTransform: restTransforms.float4x4Array[i]
                 )
                 joints.append(joint)
-                if i < maxJointsToPrint {
-                    print("DEBUG: Loaded joint \(joint.name) with path \(joint.path)")
-                }
+                if i + 1 == maxJointsToStore { break }
             }
-            if jointCount > maxJointsToPrint {
-                print("DEBUG: ... \(jointCount - maxJointsToPrint) more joints loaded")
-            }
-        } else {
-            print("DEBUG: No skeleton found in asset.")
         }
     }
     
     private func loadAnimations() {
         guard let asset = asset else { return }
-        var foundAnimation = false
-        
-        // First, check for MDLPackedJointAnimation types (MDLPackedJointAnimation is an MDLObject subclass)
-        if let packedAnimations = asset.childObjects(of: MDLPackedJointAnimation.self) as? [MDLPackedJointAnimation],
-           !packedAnimations.isEmpty {
-            print("DEBUG: Found \(packedAnimations.count) packed joint animations in asset.")
+        let animationsContainer = asset.animations
+        if animationsContainer.objects.count > 0 {
+            for object in animationsContainer.objects {
+                if let packedAnim = object as? MDLPackedJointAnimation {
+                    let translationsArray = packedAnim.translations.float3Array
+                    let rotationsArray = packedAnim.rotations.floatQuaternionArray
+                    let scalesArray = packedAnim.scales.float3Array
+                    if packedAnim.jointPaths.isEmpty ||
+                        translationsArray.isEmpty ||
+                        rotationsArray.isEmpty ||
+                        scalesArray.isEmpty {
+                        continue
+                    }
+                    let animationName = (packedAnim as MDLNamed).name.isEmpty ?
+                                        "Animation_\(animations.count + 1)" :
+                                        (packedAnim as MDLNamed).name
+                    let anim = ModelAnimation(
+                        name: animationName,
+                        jointPaths: packedAnim.jointPaths,
+                        translations: translationsArray,
+                        rotations: rotationsArray,
+                        scales: scalesArray,
+                        duration: asset.endTime,
+                        frameInterval: asset.frameInterval
+                    )
+                    animations.append(anim)
+                }
+            }
+        } else if let packedAnimations = asset.childObjects(of: MDLPackedJointAnimation.self) as? [MDLPackedJointAnimation],
+                  !packedAnimations.isEmpty {
             for animation in packedAnimations {
                 let translationsArray = animation.translations.float3Array
                 let rotationsArray = animation.rotations.floatQuaternionArray
                 let scalesArray = animation.scales.float3Array
-                
-                print("DEBUG: Animation '\((animation as MDLNamed).name)' details:")
-                print("       jointPaths count: \(animation.jointPaths.count)")
-                print("       translations count: \(translationsArray.count)")
-                print("       rotations count: \(rotationsArray.count)")
-                print("       scales count: \(scalesArray.count)")
-                
                 if animation.jointPaths.isEmpty ||
                     translationsArray.isEmpty ||
                     rotationsArray.isEmpty ||
                     scalesArray.isEmpty {
-                    print("WARNING: Animation '\((animation as MDLNamed).name)' has incomplete animation data.")
                     continue
                 }
-                
                 let animationName = (animation as MDLNamed).name.isEmpty ?
-                                    "Animation_\(animations.count + 1)" : (animation as MDLNamed).name
-                
+                                    "Animation_\(animations.count + 1)" :
+                                    (animation as MDLNamed).name
                 let anim = ModelAnimation(
                     name: animationName,
                     jointPaths: animation.jointPaths,
                     translations: translationsArray,
                     rotations: rotationsArray,
                     scales: scalesArray,
-                    duration: asset.endTime, // Adjust if necessary.
+                    duration: asset.endTime,
                     frameInterval: asset.frameInterval
                 )
                 animations.append(anim)
-                print("DEBUG: Imported animation '\(anim.name)' with duration \(anim.duration)s and frame interval \(anim.frameInterval)s")
-                foundAnimation = true
             }
-        }
-        
-        // Next, check for animations embedded in MDLAnimationBindComponent via the asset.animations container.
-        // Note: MDLAnimationBindComponent is not an MDLObject subclass so we cannot query it via childObjects(of:).
-        if let animationsContainer = asset.animations as? MDLObjectContainerComponent {
-            for object in animationsContainer.objects {
-                if let bindComponent = object as? MDLAnimationBindComponent,
-                   let jointAnim = bindComponent.jointAnimation {
-                    if let packedAnim = jointAnim as? MDLPackedJointAnimation {
-                        let translationsArray = packedAnim.translations.float3Array
-                        let rotationsArray = packedAnim.rotations.floatQuaternionArray
-                        let scalesArray = packedAnim.scales.float3Array
-                        
-                        if packedAnim.jointPaths.isEmpty ||
-                            translationsArray.isEmpty ||
-                            rotationsArray.isEmpty ||
-                            scalesArray.isEmpty {
-                            print("WARNING: Animation from bind component '\((packedAnim as MDLNamed).name)' has incomplete data.")
-                            continue
-                        }
-                        
-                        let animationName = (packedAnim as MDLNamed).name.isEmpty ?
-                                            "Animation_\(animations.count + 1)" : (packedAnim as MDLNamed).name
-                        
-                        let anim = ModelAnimation(
-                            name: animationName,
-                            jointPaths: packedAnim.jointPaths,
-                            translations: translationsArray,
-                            rotations: rotationsArray,
-                            scales: scalesArray,
-                            duration: asset.endTime,
-                            frameInterval: asset.frameInterval
-                        )
-                        animations.append(anim)
-                        print("DEBUG: Imported animation from bind component '\(anim.name)' with duration \(anim.duration)s and frame interval \(anim.frameInterval)s")
-                        foundAnimation = true
-                    } else {
-                        print("DEBUG: Found non-packed joint animation of type \(jointAnim.self). Support for this type can be added as needed.")
-                    }
-                }
-            }
-        }
-        
-        if !foundAnimation {
-            print("DEBUG: No joint animations found in asset.")
         }
     }
     
     private func loadCameras() {
         let cameraObjects = asset?.childObjects(of: MDLCamera.self) as? [MDLCamera] ?? []
-        print("DEBUG: Found \(cameraObjects.count) camera(s) in asset.")
         for camera in cameraObjects {
             let transform = camera.transform?.matrix ?? matrix_identity_float4x4
             let position = vec3f(transform.columns.3.x,
                                  transform.columns.3.y,
                                  transform.columns.3.z)
-            
             let cameraName = (camera as MDLNamed).name.isEmpty ?
                              "Camera_\(cameras.count + 1)" : (camera as MDLNamed).name
-            
             cameras.append(ModelCamera(
                 name: cameraName,
                 position: position,
@@ -339,21 +271,16 @@ class Model3D {
                 nearPlane: 0.1,
                 farPlane: 100.0
             ))
-            print("DEBUG: Loaded camera '\(cameraName)' at position (\(position.x), \(position.y), \(position.z)) with FOV \(camera.fieldOfView)")
         }
     }
     
     private func loadLights() {
-        // Support multiple MDLLight types.
         let lightObjects = asset?.childObjects(of: MDLLight.self) as? [MDLLight] ?? []
-        print("DEBUG: Found \(lightObjects.count) light(s) in asset.")
-        
         for light in lightObjects {
             let transform = light.transform?.matrix ?? matrix_identity_float4x4
             let position = vec3f(transform.columns.3.x,
                                  transform.columns.3.y,
                                  transform.columns.3.z)
-            
             let defaultColor = vec3f(1.0, 1.0, 1.0)
             let lightType: ModelLight.LightType
             let lightClassName = String(describing: type(of: light))
@@ -367,10 +294,8 @@ class Model3D {
             default:
                 lightType = .point
             }
-            
             let lightName = (light as MDLNamed).name.isEmpty ?
                             "Light_\(lights.count + 1)" : (light as MDLNamed).name
-            
             lights.append(ModelLight(
                 name: lightName,
                 type: lightType,
@@ -379,14 +304,12 @@ class Model3D {
                 position: position,
                 direction: lightType == .directional ? vec3f(0, 0, -1) : nil
             ))
-            print("DEBUG: Loaded light '\(lightName)' with type \(lightType) at position (\(position.x), \(position.y), \(position.z))")
         }
     }
     
-    // MARK: - Utility Methods
-    func printAvailableComponents() {
+    // Public function to print all model components.
+    public func printAllComponents() {
         print("\n=== Model Component Summary ===")
-        // Asset Info
         if let asset = asset {
             print("Frame Interval: \(asset.frameInterval)")
             print("Time Range: \(asset.startTime) to \(asset.endTime)")
@@ -394,16 +317,12 @@ class Model3D {
                 print("Up Axis: \(asset.upAxis)")
             }
         }
-        
-        // Meshes
         print("\nMeshes: \(meshes.count)")
         for (index, mesh) in meshes.enumerated() {
             let name = (mesh as MDLNamed).name
             let meshName = name.isEmpty ? "Mesh_\(index + 1)" : name
             print("  \(index + 1). \(meshName) - Vertices: \(mesh.vertexCount)")
         }
-        
-        // Skeleton - print only a subset for brevity
         print("\nSkeleton:")
         if let skeleton = skeleton {
             let totalJoints = skeleton.jointPaths.count
@@ -418,20 +337,14 @@ class Model3D {
         } else {
             print("  No skeleton found")
         }
-        
-        // Animations
         print("\nAnimations: \(animations.count)")
         for (index, animation) in animations.enumerated() {
             print("  \(index + 1). \(animation.name) - Duration: \(animation.duration)s, Frame Interval: \(animation.frameInterval)s")
         }
-        
-        // Cameras
         print("\nCameras: \(cameras.count)")
         for (index, camera) in cameras.enumerated() {
             print("  \(index + 1). \(camera.name) - Position: (\(camera.position.x), \(camera.position.y), \(camera.position.z)), FOV: \(camera.fieldOfView)")
         }
-        
-        // Lights
         print("\nLights: \(lights.count)")
         for (index, light) in lights.enumerated() {
             print("  \(index + 1). \(light.name) - Type: \(light.type), Color: (\(light.color.x), \(light.color.y), \(light.color.z)), Position: (\(light.position.x), \(light.position.y), \(light.position.z))")

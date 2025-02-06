@@ -25,6 +25,9 @@ class Drawable: NSObject {
     
     
     
+    
+    var girlModel : Model3D?
+    
     struct Uniforms {
         var viewProjectionMatrix: mat4f
         var model: mat4f
@@ -59,8 +62,8 @@ class Drawable: NSObject {
             
             do {
                 try model3D.load(from: modelURL)
-                print("Model loaded successfully!")
-                // Now you can access model3D.meshes, model3D.textures, etc.
+                model3D.printAllComponents()
+                girlModel = model3D
             } catch {
                 print("Failed to load model: \(error)")
             }
