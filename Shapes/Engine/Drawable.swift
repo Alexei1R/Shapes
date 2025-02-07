@@ -150,13 +150,17 @@ class Drawable: NSObject {
             print("Shader loading error: \(error)")
         }
         
+        
         let vertexLayout = BufferLayout(elements: [
             BufferElement(type: .float3, name: "position"),
             BufferElement(type: .float3, name: "normal"),
             BufferElement(type: .float2, name: "textureCoordinate"),
             BufferElement(type: .float3, name: "tangent"),
-            BufferElement(type: .float3, name: "bitangent")
+            BufferElement(type: .float3, name: "bitangent"),
+            BufferElement(type: .float4, name: "indices"),
+            BufferElement(type: .float4, name: "weight")
         ])
+
         
         pipelineDescriptor.vertexDescriptor = vertexLayout.metalVertexDescriptor(bufferIndex: 0)
         pipelineDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
@@ -225,7 +229,6 @@ extension Drawable: MTKViewDelegate {
 }
 
 extension Drawable {
-    // Move extractMeshData inside the Drawable class as a private method
     private func extractMeshData(from mdlMesh: MDLMesh) -> MeshData? {
         guard let vertexBuffer = mdlMesh.vertexBuffers.first else {
             print("No vertex buffer found!")
@@ -242,26 +245,67 @@ extension Drawable {
             return nil
         }
         
+        let strideInFloats = stride.stride / MemoryLayout<Float>.stride
         
         for i in 0..<vertexCount {
-            let base = (i * stride.stride) / MemoryLayout<Float>.stride
+            let base = i * strideInFloats
             
-            let position = SIMD3<Float>(vertexData[base + 0], vertexData[base + 1], vertexData[base + 2])
-            let normal = SIMD3<Float>(vertexData[base + 3], vertexData[base + 4], vertexData[base + 5])
-            let texCoord = SIMD2<Float>(vertexData[base + 6], vertexData[base + 7])
-            let tangent = SIMD3<Float>(vertexData[base + 8], vertexData[base + 9], vertexData[base + 10])
-            let bitangent = SIMD3<Float>(vertexData[base + 11], vertexData[base + 12], vertexData[base + 13])
+            // Extract vertex attributes with proper offsets
+            let position = SIMD3<Float>(
+                vertexData[base],
+                vertexData[base + 1],
+                vertexData[base + 2]
+            )
             
+            let normal = SIMD3<Float>(
+                vertexData[base + 3],
+                vertexData[base + 4],
+                vertexData[base + 5]
+            )
+            
+            let texCoord = SIMD2<Float>(
+                vertexData[base + 6],
+                vertexData[base + 7]
+            )
+            
+            let tangent = SIMD3<Float>(
+                vertexData[base + 8],
+                vertexData[base + 9],
+                vertexData[base + 10]
+            )
+            
+            let bitangent = SIMD3<Float>(
+                vertexData[base + 11],
+                vertexData[base + 12],
+                vertexData[base + 13]
+            )
+            
+            let jointIndices = SIMD4<Float>(
+                vertexData[base + 14],
+                vertexData[base + 15],
+                vertexData[base + 16],
+                vertexData[base + 17]
+            )
+            
+            let jointWeights = SIMD4<Float>(
+                vertexData[base + 18],
+                vertexData[base + 19],
+                vertexData[base + 20],
+                vertexData[base + 21]
+            )
             
             vertices.append(ModelVertex(
                 position: position,
                 normal: normal,
                 textureCoordinate: texCoord,
                 tangent: tangent,
-                bitangent: bitangent
+                bitangent: bitangent,
+                jointIndices: jointIndices,
+                jointWeights: jointWeights
             ))
         }
         
+        // Extract indices
         var indices: [UInt32] = []
         
         for submesh in mdlMesh.submeshes as! [MDLSubmesh] {
@@ -275,5 +319,4 @@ extension Drawable {
         }
         
         return MeshData(vertices: vertices, indices: indices)
-    }
-}
+    }}

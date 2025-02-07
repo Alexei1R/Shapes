@@ -17,6 +17,8 @@ struct ModelVertex {
     var textureCoordinate: vec2f
     var tangent: vec3f
     var bitangent: vec3f
+    var jointIndices: vec4f
+    var jointWeights: vec4f  
 }
 
 struct ModelTexture {
@@ -87,32 +89,64 @@ class Model3D {
     private(set) var cameras: [ModelCamera] = []
     private(set) var lights: [ModelLight] = []
     
+
+    // Update the vertex descriptor in Model3D class:
     private let vertexDescriptor: MDLVertexDescriptor = {
         let descriptor = MDLVertexDescriptor()
+        var offset: Int = 0
+        
+        // Position
         descriptor.attributes[0] = MDLVertexAttribute(name: MDLVertexAttributePosition,
-                                                      format: .float3,
-                                                      offset: 0,
-                                                      bufferIndex: 0)
+                                                    format: .float3,
+                                                    offset: offset,
+                                                    bufferIndex: 0)
+        offset += MemoryLayout<vec3f>.stride
+        
+        // Normal
         descriptor.attributes[1] = MDLVertexAttribute(name: MDLVertexAttributeNormal,
-                                                      format: .float3,
-                                                      offset: 12,
-                                                      bufferIndex: 0)
+                                                    format: .float3,
+                                                    offset: offset,
+                                                    bufferIndex: 0)
+        offset += MemoryLayout<vec3f>.stride
+        
+        // Texture coordinates
         descriptor.attributes[2] = MDLVertexAttribute(name: MDLVertexAttributeTextureCoordinate,
-                                                      format: .float2,
-                                                      offset: 24,
-                                                      bufferIndex: 0)
+                                                    format: .float2,
+                                                    offset: offset,
+                                                    bufferIndex: 0)
+        offset += MemoryLayout<vec2f>.stride
+        
+        // Tangent
         descriptor.attributes[3] = MDLVertexAttribute(name: MDLVertexAttributeTangent,
-                                                      format: .float3,
-                                                      offset: 32,
-                                                      bufferIndex: 0)
+                                                    format: .float3,
+                                                    offset: offset,
+                                                    bufferIndex: 0)
+        offset += MemoryLayout<vec3f>.stride
+        
+        // Bitangent
         descriptor.attributes[4] = MDLVertexAttribute(name: MDLVertexAttributeBitangent,
-                                                      format: .float3,
-                                                      offset: 44,
-                                                      bufferIndex: 0)
-        descriptor.layouts[0] = MDLVertexBufferLayout(stride: 56)
+                                                    format: .float3,
+                                                    offset: offset,
+                                                    bufferIndex: 0)
+        offset += MemoryLayout<vec3f>.stride
+        
+        // Joint indices
+        descriptor.attributes[5] = MDLVertexAttribute(name: MDLVertexAttributeJointIndices,
+                                                    format: .float4,
+                                                    offset: offset,
+                                                    bufferIndex: 0)
+        offset += MemoryLayout<vec4f>.stride
+        
+        // Joint weights
+        descriptor.attributes[6] = MDLVertexAttribute(name: MDLVertexAttributeJointWeights,
+                                                    format: .float4,
+                                                    offset: offset,
+                                                    bufferIndex: 0)
+        offset += MemoryLayout<vec4f>.stride
+        
+        descriptor.layouts[0] = MDLVertexBufferLayout(stride: offset)
         return descriptor
     }()
-    
     func load(from url: URL, preserveTopology: Bool = false) throws {
         guard let device = MTLCreateSystemDefaultDevice() else {
             throw ModelLoaderError.failedToLoadAsset("No Metal device found.")

@@ -110,24 +110,12 @@ class BufferLayout {
         }
         
         stride = align(offset, to: maxAlignment)
-        printLayoutDebug()
     }
     
     private func align(_ offset: Int, to alignment: Int) -> Int {
         return (offset + alignment - 1) / alignment * alignment
     }
     
-    func printLayoutDebug() {
-        print("\n=== Buffer Layout Debug ===")
-        print("Total stride: \(stride) bytes")
-        for element in elements {
-            print("Element: \(element.name)")
-            print("  Type: \(element.type)")
-            print("  Offset: \(element.offset)")
-            print("  Size: \(element.size)")
-        }
-        print("========================\n")
-    }
     
     func metalVertexDescriptor(bufferIndex: Int) -> MTLVertexDescriptor {
         let descriptor = MTLVertexDescriptor()

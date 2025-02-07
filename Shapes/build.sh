@@ -38,7 +38,8 @@ temp_file=$(mktemp)
 files=(
     "Engine/Drawable.swift"
     "Engine/Renderer/Model.swift"
-    "Engine/Utils/Time.swift"
+    # "Engine/Renderer/Animation.swift"
+    # "Engine/Utils/Time.swift"
     "Shaders/ModelShaders.metal"
     "Math/Math.swift"
 )
