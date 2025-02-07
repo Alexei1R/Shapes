@@ -17,11 +17,13 @@ class Time {
     private(set) var totalTime: Double = 0.0
     var deltaTimeFloat: Float { Float(deltaTime) }
     var totalTimeFloat: Float { Float(totalTime) }
+    var now : Float
 
     init() {
         let initialTime = CACurrentMediaTime()
         self.previousTime = initialTime
         self.startTime = initialTime
+        self.now = Float(CACurrentMediaTime())
     }
 
     func update() {
@@ -30,6 +32,7 @@ class Time {
         deltaTime = min(rawDelta, maxDelta)
         totalTime = currentTime - startTime
         previousTime = currentTime
+        now =  Float(currentTime)
     }
 
     func reset() {

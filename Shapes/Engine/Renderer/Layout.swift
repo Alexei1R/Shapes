@@ -5,6 +5,8 @@
 //  Created by rusu alexei on 04.02.2025.
 //
 
+
+
 import Foundation
 import Metal
 
@@ -51,11 +53,11 @@ enum BufferDataType {
         switch self {
         case .float: return 4
         case .float2: return 8
-        case .float3: return 4
+        case .float3: return 16
         case .float4: return 16
         case .int: return 4
         case .int2: return 8
-        case .int3: return 4
+        case .int3: return 16
         case .int4: return 16
         case .bool: return 1
         }
@@ -75,10 +77,6 @@ struct BufferElement {
     }
 }
 
-protocol BufferDescriptor {
-    func metalVertexDescriptor(bufferIndex: Int) -> MTLVertexDescriptor
-}
-
 class BufferLayout {
     private(set) var elements: [BufferElement]
     private(set) var stride: Int = 0
@@ -96,10 +94,13 @@ class BufferLayout {
         var offset = 0
         var maxAlignment = 1
         
+        for element in elements {
+            maxAlignment = max(maxAlignment, element.type.alignment)
+        }
+        
         for i in 0..<elements.count {
             let dataType = elements[i].type
             offset = align(offset, to: dataType.alignment)
-            maxAlignment = max(maxAlignment, dataType.alignment)
             
             var element = elements[i]
             element.offset = offset
@@ -109,10 +110,23 @@ class BufferLayout {
         }
         
         stride = align(offset, to: maxAlignment)
+        printLayoutDebug()
     }
     
     private func align(_ offset: Int, to alignment: Int) -> Int {
         return (offset + alignment - 1) / alignment * alignment
+    }
+    
+    func printLayoutDebug() {
+        print("\n=== Buffer Layout Debug ===")
+        print("Total stride: \(stride) bytes")
+        for element in elements {
+            print("Element: \(element.name)")
+            print("  Type: \(element.type)")
+            print("  Offset: \(element.offset)")
+            print("  Size: \(element.size)")
+        }
+        print("========================\n")
     }
     
     func metalVertexDescriptor(bufferIndex: Int) -> MTLVertexDescriptor {
@@ -131,4 +145,3 @@ class BufferLayout {
         return descriptor
     }
 }
-

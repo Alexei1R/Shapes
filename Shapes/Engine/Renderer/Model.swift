@@ -1,3 +1,4 @@
+
 import ModelIO
 import MetalKit
 
@@ -16,14 +17,6 @@ struct ModelVertex {
     var textureCoordinate: vec2f
     var tangent: vec3f
     var bitangent: vec3f
-    
-    static func == (lhs: ModelVertex, rhs: ModelVertex) -> Bool {
-            return lhs.position == rhs.position &&
-                   lhs.normal == rhs.normal &&
-                   lhs.textureCoordinate == rhs.textureCoordinate &&
-                   lhs.tangent == rhs.tangent &&
-                   lhs.bitangent == rhs.bitangent
-        }
 }
 
 struct ModelTexture {
@@ -62,11 +55,10 @@ struct ModelAnimation {
 struct ModelCamera {
     let name: String
     let position: vec3f
-    let target: vec3f
+    let rotation: simd_quatf
     let fieldOfView: Float
     let nearPlane: Float
-    let farPlane: Float
-}
+    let farPlane: Float}
 
 struct ModelLight {
     let name: String
@@ -86,7 +78,6 @@ struct ModelLight {
 
 class Model3D {
     
-    
     private(set) var asset: MDLAsset?
     private(set) var meshes: [MDLMesh] = []
     private(set) var textures: [ModelTexture] = []
@@ -99,31 +90,29 @@ class Model3D {
     private let vertexDescriptor: MDLVertexDescriptor = {
         let descriptor = MDLVertexDescriptor()
         descriptor.attributes[0] = MDLVertexAttribute(name: MDLVertexAttributePosition,
-                                                        format: .float3,
-                                                        offset: 0,
-                                                        bufferIndex: 0)
+                                                      format: .float3,
+                                                      offset: 0,
+                                                      bufferIndex: 0)
         descriptor.attributes[1] = MDLVertexAttribute(name: MDLVertexAttributeNormal,
-                                                        format: .float3,
-                                                        offset: 12,
-                                                        bufferIndex: 0)
+                                                      format: .float3,
+                                                      offset: 12,
+                                                      bufferIndex: 0)
         descriptor.attributes[2] = MDLVertexAttribute(name: MDLVertexAttributeTextureCoordinate,
-                                                        format: .float2,
-                                                        offset: 24,
-                                                        bufferIndex: 0)
+                                                      format: .float2,
+                                                      offset: 24,
+                                                      bufferIndex: 0)
         descriptor.attributes[3] = MDLVertexAttribute(name: MDLVertexAttributeTangent,
-                                                        format: .float3,
-                                                        offset: 32,
-                                                        bufferIndex: 0)
+                                                      format: .float3,
+                                                      offset: 32,
+                                                      bufferIndex: 0)
         descriptor.attributes[4] = MDLVertexAttribute(name: MDLVertexAttributeBitangent,
-                                                        format: .float3,
-                                                        offset: 44,
-                                                        bufferIndex: 0)
+                                                      format: .float3,
+                                                      offset: 44,
+                                                      bufferIndex: 0)
         descriptor.layouts[0] = MDLVertexBufferLayout(stride: 56)
         return descriptor
     }()
     
-    // The load method loads the model and all components.
-    // It does NOT print out the summary. The summary is printed only when printAllComponents() is invoked.
     func load(from url: URL, preserveTopology: Bool = false) throws {
         guard let device = MTLCreateSystemDefaultDevice() else {
             throw ModelLoaderError.failedToLoadAsset("No Metal device found.")
@@ -141,7 +130,6 @@ class Model3D {
         guard let asset = asset else {
             throw ModelLoaderError.failedToLoadAsset(url.lastPathComponent)
         }
-        
         
         print("///////////////////////////////////////////////////////////////////////////////////////")
         
@@ -166,8 +154,8 @@ class Model3D {
                 }
                 if !attributes.contains(where: { $0.name == MDLVertexAttributeTangent }) {
                     mesh.addTangentBasis(forTextureCoordinateAttributeNamed: MDLVertexAttributeTextureCoordinate,
-                                           tangentAttributeNamed: MDLVertexAttributeTangent,
-                                           bitangentAttributeNamed: MDLVertexAttributeBitangent)
+                                         tangentAttributeNamed: MDLVertexAttributeTangent,
+                                         bitangentAttributeNamed: MDLVertexAttributeBitangent)
                 }
             }
         }
@@ -182,7 +170,6 @@ class Model3D {
             let bindTransforms = firstSkeleton.jointBindTransforms
             let restTransforms = firstSkeleton.jointRestTransforms
             let jointCount = paths.count
-            // We only store up to 5 joints for demonstration – adjust if you need all joints.
             let maxJointsToStore = 5
             for i in 0..<jointCount {
                 let joint = ModelJoint(
@@ -213,8 +200,8 @@ class Model3D {
                         continue
                     }
                     let animationName = (packedAnim as MDLNamed).name.isEmpty ?
-                                        "Animation_\(animations.count + 1)" :
-                                        (packedAnim as MDLNamed).name
+                    "Animation_\(animations.count + 1)" :
+                    (packedAnim as MDLNamed).name
                     let anim = ModelAnimation(
                         name: animationName,
                         jointPaths: packedAnim.jointPaths,
@@ -240,8 +227,8 @@ class Model3D {
                     continue
                 }
                 let animationName = (animation as MDLNamed).name.isEmpty ?
-                                    "Animation_\(animations.count + 1)" :
-                                    (animation as MDLNamed).name
+                "Animation_\(animations.count + 1)" :
+                (animation as MDLNamed).name
                 let anim = ModelAnimation(
                     name: animationName,
                     jointPaths: animation.jointPaths,
@@ -263,18 +250,19 @@ class Model3D {
             let position = vec3f(transform.columns.3.x,
                                  transform.columns.3.y,
                                  transform.columns.3.z)
+            // Extract rotation from the transform matrix.
+            let rotation = simd_quaternion(transform)
             let cameraName = (camera as MDLNamed).name.isEmpty ?
-                             "Camera_\(cameras.count + 1)" : (camera as MDLNamed).name
+            "Camera_\(cameras.count + 1)" : (camera as MDLNamed).name
             cameras.append(ModelCamera(
                 name: cameraName,
                 position: position,
-                target: vec3f(0, 0, -1),
+                rotation: rotation,
                 fieldOfView: camera.fieldOfView,
                 nearPlane: 0.1,
                 farPlane: 100.0
             ))
-        }
-    }
+        }    }
     
     private func loadLights() {
         let lightObjects = asset?.childObjects(of: MDLLight.self) as? [MDLLight] ?? []
@@ -297,7 +285,7 @@ class Model3D {
                 lightType = .point
             }
             let lightName = (light as MDLNamed).name.isEmpty ?
-                            "Light_\(lights.count + 1)" : (light as MDLNamed).name
+            "Light_\(lights.count + 1)" : (light as MDLNamed).name
             lights.append(ModelLight(
                 name: lightName,
                 type: lightType,
@@ -309,7 +297,6 @@ class Model3D {
         }
     }
     
-    // Public function to print all model components.
     public func printAllComponents() {
         print("\n=== Model Component Summary ===")
         if let asset = asset {
@@ -354,3 +341,4 @@ class Model3D {
         print("============================\n")
     }
 }
+

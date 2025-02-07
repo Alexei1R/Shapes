@@ -37,13 +37,10 @@ temp_file=$(mktemp)
 # Array of target files
 files=(
     "Engine/Drawable.swift"
-    "Engine/Renderer/Buffer.swift"
     "Engine/Renderer/Model.swift"
-    "Engine/Renderer/Layout.swift"
-    # "Engine/Renderer/RPassDesc.swift"
-    # "Engine/Renderer/Shader.swift"
-    # "Shaders/Shader.metal"
+    "Engine/Utils/Time.swift"
     "Shaders/ModelShaders.metal"
+    "Math/Math.swift"
 )
 
 # Append contents of each file to temp file
