@@ -8,11 +8,6 @@
 import Foundation
 import MetalKit
 
-// Move MeshData to a separate file or declare it here only once
-struct MeshData {
-    var vertices: [ModelVertex]
-    var indices: [UInt32]
-}
 
 class Drawable: NSObject {
     let device: MTLDevice
@@ -60,7 +55,16 @@ class Drawable: NSObject {
                 model3D.printAllComponents()
                 
                 if let firstMesh = model3D.meshes.first,
-                   let meshData = extractMeshData(from: firstMesh) {
+                   let meshData = model3D.extractMeshData(from: firstMesh) {
+                    
+                    
+                    var count = 0
+                    for vertex in meshData.vertices {
+                        print(vertex)
+                        count += 1
+                        if count >= 20 { break }
+                    }
+                    
                     
                     vertexBuffer = MetalBuffer<ModelVertex>(
                         device: device,
@@ -160,7 +164,7 @@ class Drawable: NSObject {
             BufferElement(type: .float4, name: "indices"),
             BufferElement(type: .float4, name: "weight")
         ])
-
+        
         
         pipelineDescriptor.vertexDescriptor = vertexLayout.metalVertexDescriptor(bufferIndex: 0)
         pipelineDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
@@ -228,95 +232,3 @@ extension Drawable: MTKViewDelegate {
     }
 }
 
-extension Drawable {
-    private func extractMeshData(from mdlMesh: MDLMesh) -> MeshData? {
-        guard let vertexBuffer = mdlMesh.vertexBuffers.first else {
-            print("No vertex buffer found!")
-            return nil
-        }
-        
-        let vertexData = vertexBuffer.map().bytes.assumingMemoryBound(to: Float.self)
-        let vertexCount = mdlMesh.vertexCount
-        
-        var vertices: [ModelVertex] = []
-        
-        guard let stride = mdlMesh.vertexDescriptor.layouts[0] as? MDLVertexBufferLayout else {
-            print("No vertex layout found!")
-            return nil
-        }
-        
-        let strideInFloats = stride.stride / MemoryLayout<Float>.stride
-        
-        for i in 0..<vertexCount {
-            let base = i * strideInFloats
-            
-            // Extract vertex attributes with proper offsets
-            let position = SIMD3<Float>(
-                vertexData[base],
-                vertexData[base + 1],
-                vertexData[base + 2]
-            )
-            
-            let normal = SIMD3<Float>(
-                vertexData[base + 3],
-                vertexData[base + 4],
-                vertexData[base + 5]
-            )
-            
-            let texCoord = SIMD2<Float>(
-                vertexData[base + 6],
-                vertexData[base + 7]
-            )
-            
-            let tangent = SIMD3<Float>(
-                vertexData[base + 8],
-                vertexData[base + 9],
-                vertexData[base + 10]
-            )
-            
-            let bitangent = SIMD3<Float>(
-                vertexData[base + 11],
-                vertexData[base + 12],
-                vertexData[base + 13]
-            )
-            
-            let jointIndices = SIMD4<Float>(
-                vertexData[base + 14],
-                vertexData[base + 15],
-                vertexData[base + 16],
-                vertexData[base + 17]
-            )
-            
-            let jointWeights = SIMD4<Float>(
-                vertexData[base + 18],
-                vertexData[base + 19],
-                vertexData[base + 20],
-                vertexData[base + 21]
-            )
-            
-            vertices.append(ModelVertex(
-                position: position,
-                normal: normal,
-                textureCoordinate: texCoord,
-                tangent: tangent,
-                bitangent: bitangent,
-                jointIndices: jointIndices,
-                jointWeights: jointWeights
-            ))
-        }
-        
-        // Extract indices
-        var indices: [UInt32] = []
-        
-        for submesh in mdlMesh.submeshes as! [MDLSubmesh] {
-            let indexBuffer = submesh.indexBuffer
-            let indexData = indexBuffer.map().bytes.assumingMemoryBound(to: UInt32.self)
-            
-            let indexCount = submesh.indexCount
-            for i in 0..<indexCount {
-                indices.append(indexData[i])
-            }
-        }
-        
-        return MeshData(vertices: vertices, indices: indices)
-    }}
