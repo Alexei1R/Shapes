@@ -1,57 +1,38 @@
-
-import ModelIO
+import Foundation
 import MetalKit
+import ModelIO
+import simd
 
 enum ModelLoaderError: Error {
     case failedToLoadAsset(String)
     case invalidMesh
     case missingVertexData
-    case unsupportedFormat
-    case textureLoadingFailed(String)
-    case animationError(String)
+    case unsupportedIndexFormat
 }
 
-struct ModelVertex {
-    var position: vec3f
-    var normal: vec3f
-    var textureCoordinate: vec2f
-    var tangent: vec3f
-    var bitangent: vec3f
-    var jointIndices: vec4f
-    var jointWeights: vec4f  
+public struct ModelVertex {
+    var position: SIMD3<Float>
+    var normal: SIMD3<Float>
+    var textureCoordinate: SIMD2<Float>
+    var tangent: SIMD3<Float>
+    var bitangent: SIMD3<Float>
+    var jointIndices: SIMD4<UInt16>
+    var jointWeights: SIMD4<Float>
 }
 
-
-
-struct MeshData {
+public struct MeshData {
     var vertices: [ModelVertex]
     var indices: [UInt32]
 }
 
-struct ModelTexture {
+public struct ModelJoint {
     let name: String
     let path: String
-    let type: TextureType
-    var texture: MDLTexture?
-    
-    enum TextureType {
-        case diffuse
-        case normal
-        case metallic
-        case roughness
-        case ambientOcclusion
-        case emission
-    }
+    let bindTransform: simd_float4x4
+    let restTransform: simd_float4x4
 }
 
-struct ModelJoint {
-    let name: String
-    let path: String
-    let bindTransform: matrix_float4x4
-    let restTransform: matrix_float4x4
-}
-
-struct ModelAnimation {
+public struct ModelAnimation {
     let name: String
     let jointPaths: [String]
     let translations: [SIMD3<Float>]
@@ -61,147 +42,113 @@ struct ModelAnimation {
     let frameInterval: TimeInterval
 }
 
-struct ModelCamera {
-    let name: String
-    let position: vec3f
-    let rotation: simd_quatf
-    let fieldOfView: Float
-    let nearPlane: Float
-    let farPlane: Float}
-
-struct ModelLight {
-    let name: String
-    let type: LightType
-    let color: vec3f
-    let intensity: Float
-    let position: vec3f
-    let direction: vec3f?
-    
-    enum LightType {
-        case directional
-        case point
-        case spot
-        case area
-    }
-}
-
-class Model3D {
-    
+public class Model3D {
     private(set) var asset: MDLAsset?
     private(set) var meshes: [MDLMesh] = []
-    private(set) var textures: [ModelTexture] = []
     private(set) var skeleton: MDLSkeleton?
     private(set) var joints: [ModelJoint] = []
     private(set) var animations: [ModelAnimation] = []
-    private(set) var cameras: [ModelCamera] = []
-    private(set) var lights: [ModelLight] = []
-    
 
-    // Update the vertex descriptor in Model3D class:
+    // Create a vertex descriptor that defines our ModelVertex layout.
+    // We store joint indices as float4 and later convert them to UInt16.
     private let vertexDescriptor: MDLVertexDescriptor = {
         let descriptor = MDLVertexDescriptor()
-        var offset: Int = 0
-        
-        // Position
+        var offset = 0
+
+        // Position (Float3)
         descriptor.attributes[0] = MDLVertexAttribute(name: MDLVertexAttributePosition,
-                                                    format: .float3,
-                                                    offset: offset,
-                                                    bufferIndex: 0)
-        offset += MemoryLayout<vec3f>.stride
-        
-        // Normal
+                                                        format: .float3,
+                                                        offset: offset,
+                                                        bufferIndex: 0)
+        offset += MemoryLayout<SIMD3<Float>>.stride
+
+        // Normal (Float3)
         descriptor.attributes[1] = MDLVertexAttribute(name: MDLVertexAttributeNormal,
-                                                    format: .float3,
-                                                    offset: offset,
-                                                    bufferIndex: 0)
-        offset += MemoryLayout<vec3f>.stride
-        
-        // Texture coordinates
+                                                        format: .float3,
+                                                        offset: offset,
+                                                        bufferIndex: 0)
+        offset += MemoryLayout<SIMD3<Float>>.stride
+
+        // Texture Coordinate (Float2)
         descriptor.attributes[2] = MDLVertexAttribute(name: MDLVertexAttributeTextureCoordinate,
-                                                    format: .float2,
-                                                    offset: offset,
-                                                    bufferIndex: 0)
-        offset += MemoryLayout<vec2f>.stride
-        
-        // Tangent
+                                                        format: .float2,
+                                                        offset: offset,
+                                                        bufferIndex: 0)
+        offset += MemoryLayout<SIMD2<Float>>.stride
+
+        // Tangent (Float3)
         descriptor.attributes[3] = MDLVertexAttribute(name: MDLVertexAttributeTangent,
-                                                    format: .float3,
-                                                    offset: offset,
-                                                    bufferIndex: 0)
-        offset += MemoryLayout<vec3f>.stride
-        
-        // Bitangent
+                                                        format: .float3,
+                                                        offset: offset,
+                                                        bufferIndex: 0)
+        offset += MemoryLayout<SIMD3<Float>>.stride
+
+        // Bitangent (Float3)
         descriptor.attributes[4] = MDLVertexAttribute(name: MDLVertexAttributeBitangent,
-                                                    format: .float3,
-                                                    offset: offset,
-                                                    bufferIndex: 0)
-        offset += MemoryLayout<vec3f>.stride
-        
-        // Joint indices
+                                                        format: .float3,
+                                                        offset: offset,
+                                                        bufferIndex: 0)
+        offset += MemoryLayout<SIMD3<Float>>.stride
+
+        // Joint Indices (Float4; will convert to UInt16 when extracting)
         descriptor.attributes[5] = MDLVertexAttribute(name: MDLVertexAttributeJointIndices,
-                                                    format: .float4,
-                                                    offset: offset,
-                                                    bufferIndex: 0)
-        offset += MemoryLayout<vec4f>.stride
-        
-        // Joint weights
+                                                        format: .float4,
+                                                        offset: offset,
+                                                        bufferIndex: 0)
+        offset += MemoryLayout<SIMD4<Float>>.stride
+
+        // Joint Weights (Float4)
         descriptor.attributes[6] = MDLVertexAttribute(name: MDLVertexAttributeJointWeights,
-                                                    format: .float4,
-                                                    offset: offset,
-                                                    bufferIndex: 0)
-        offset += MemoryLayout<vec4f>.stride
-        
+                                                        format: .float4,
+                                                        offset: offset,
+                                                        bufferIndex: 0)
+        offset += MemoryLayout<SIMD4<Float>>.stride
+
         descriptor.layouts[0] = MDLVertexBufferLayout(stride: offset)
         return descriptor
     }()
-    func load(from url: URL, preserveTopology: Bool = false) throws {
+
+    public func load(from url: URL, preserveTopology: Bool = false) throws {
         guard let device = MTLCreateSystemDefaultDevice() else {
-            throw ModelLoaderError.failedToLoadAsset("No Metal device found.")
+            throw ModelLoaderError.failedToLoadAsset("No Metal device available.")
         }
         let allocator = MTKMeshBufferAllocator(device: device)
-        var error: NSError?
+        var mdlError: NSError?
         asset = MDLAsset(url: url,
                          vertexDescriptor: vertexDescriptor,
                          bufferAllocator: allocator,
                          preserveTopology: preserveTopology,
-                         error: &error)
-        if let error = error {
-            throw ModelLoaderError.failedToLoadAsset(error.localizedDescription)
+                         error: &mdlError)
+        if let err = mdlError {
+            throw ModelLoaderError.failedToLoadAsset(err.localizedDescription)
         }
-        guard let asset = asset else {
+        guard asset != nil else {
             throw ModelLoaderError.failedToLoadAsset(url.lastPathComponent)
         }
-        
-        print("///////////////////////////////////////////////////////////////////////////////////////")
-        
         try loadMeshes()
         loadSkeleton()
         loadAnimations()
-        loadCameras()
-        loadLights()
     }
-    
+
     private func loadMeshes() throws {
-        if let foundMeshes = asset?.childObjects(of: MDLMesh.self) as? [MDLMesh] {
-            meshes = foundMeshes
-        } else {
-            meshes = []
+        guard let foundMeshes = asset?.childObjects(of: MDLMesh.self) as? [MDLMesh] else {
+            throw ModelLoaderError.invalidMesh
         }
+        meshes = foundMeshes
         for mesh in meshes {
             if let attributes = mesh.vertexDescriptor.attributes as? [MDLVertexAttribute] {
                 if !attributes.contains(where: { $0.name == MDLVertexAttributeNormal }) {
-                    mesh.addNormals(withAttributeNamed: MDLVertexAttributeNormal,
-                                    creaseThreshold: 0.5)
+                    mesh.addNormals(withAttributeNamed: MDLVertexAttributeNormal, creaseThreshold: 0.5)
                 }
                 if !attributes.contains(where: { $0.name == MDLVertexAttributeTangent }) {
                     mesh.addTangentBasis(forTextureCoordinateAttributeNamed: MDLVertexAttributeTextureCoordinate,
-                                         tangentAttributeNamed: MDLVertexAttributeTangent,
-                                         bitangentAttributeNamed: MDLVertexAttributeBitangent)
+                                           tangentAttributeNamed: MDLVertexAttributeTangent,
+                                           bitangentAttributeNamed: MDLVertexAttributeBitangent)
                 }
             }
         }
     }
-    
+
     private func loadSkeleton() {
         guard let asset = asset else { return }
         if let skeletons = asset.childObjects(of: MDLSkeleton.self) as? [MDLSkeleton],
@@ -211,7 +158,6 @@ class Model3D {
             let bindTransforms = firstSkeleton.jointBindTransforms
             let restTransforms = firstSkeleton.jointRestTransforms
             let jointCount = paths.count
-            let maxJointsToStore = 5
             for i in 0..<jointCount {
                 let joint = ModelJoint(
                     name: (paths[i] as NSString).lastPathComponent,
@@ -220,62 +166,30 @@ class Model3D {
                     restTransform: restTransforms.float4x4Array[i]
                 )
                 joints.append(joint)
-                if i + 1 == maxJointsToStore { break }
             }
         }
     }
-    
+
     private func loadAnimations() {
         guard let asset = asset else { return }
-        let animationsContainer = asset.animations
-        if animationsContainer.objects.count > 0 {
-            for object in animationsContainer.objects {
-                if let packedAnim = object as? MDLPackedJointAnimation {
-                    let translationsArray = packedAnim.translations.float3Array
-                    let rotationsArray = packedAnim.rotations.floatQuaternionArray
-                    let scalesArray = packedAnim.scales.float3Array
-                    if packedAnim.jointPaths.isEmpty ||
-                        translationsArray.isEmpty ||
-                        rotationsArray.isEmpty ||
-                        scalesArray.isEmpty {
-                        continue
-                    }
-                    let animationName = (packedAnim as MDLNamed).name.isEmpty ?
-                    "Animation_\(animations.count + 1)" :
-                    (packedAnim as MDLNamed).name
-                    let anim = ModelAnimation(
-                        name: animationName,
-                        jointPaths: packedAnim.jointPaths,
-                        translations: translationsArray,
-                        rotations: rotationsArray,
-                        scales: scalesArray,
-                        duration: asset.endTime,
-                        frameInterval: asset.frameInterval
-                    )
-                    animations.append(anim)
-                }
-            }
-        } else if let packedAnimations = asset.childObjects(of: MDLPackedJointAnimation.self) as? [MDLPackedJointAnimation],
-                  !packedAnimations.isEmpty {
-            for animation in packedAnimations {
-                let translationsArray = animation.translations.float3Array
-                let rotationsArray = animation.rotations.floatQuaternionArray
-                let scalesArray = animation.scales.float3Array
-                if animation.jointPaths.isEmpty ||
-                    translationsArray.isEmpty ||
-                    rotationsArray.isEmpty ||
-                    scalesArray.isEmpty {
+        if let animationObjects = asset.animations.objects as? [MDLPackedJointAnimation] {
+            for packedAnim in animationObjects {
+                let translations = packedAnim.translations.float3Array
+                let rotations = packedAnim.rotations.floatQuaternionArray
+                let scales = packedAnim.scales.float3Array
+                if packedAnim.jointPaths.isEmpty || translations.isEmpty || rotations.isEmpty || scales.isEmpty {
                     continue
                 }
-                let animationName = (animation as MDLNamed).name.isEmpty ?
-                "Animation_\(animations.count + 1)" :
-                (animation as MDLNamed).name
+                let animName: String = {
+                    let name = (packedAnim as MDLNamed).name
+                    return name.isEmpty ? "Animation_\(animations.count + 1)" : name
+                }()
                 let anim = ModelAnimation(
-                    name: animationName,
-                    jointPaths: animation.jointPaths,
-                    translations: translationsArray,
-                    rotations: rotationsArray,
-                    scales: scalesArray,
+                    name: animName,
+                    jointPaths: packedAnim.jointPaths,
+                    translations: translations,
+                    rotations: rotations,
+                    scales: scales,
                     duration: asset.endTime,
                     frameInterval: asset.frameInterval
                 )
@@ -283,63 +197,9 @@ class Model3D {
             }
         }
     }
-    
-    private func loadCameras() {
-        let cameraObjects = asset?.childObjects(of: MDLCamera.self) as? [MDLCamera] ?? []
-        for camera in cameraObjects {
-            let transform = camera.transform?.matrix ?? matrix_identity_float4x4
-            let position = vec3f(transform.columns.3.x,
-                                 transform.columns.3.y,
-                                 transform.columns.3.z)
-            // Extract rotation from the transform matrix.
-            let rotation = simd_quaternion(transform)
-            let cameraName = (camera as MDLNamed).name.isEmpty ?
-            "Camera_\(cameras.count + 1)" : (camera as MDLNamed).name
-            cameras.append(ModelCamera(
-                name: cameraName,
-                position: position,
-                rotation: rotation,
-                fieldOfView: camera.fieldOfView,
-                nearPlane: 0.1,
-                farPlane: 100.0
-            ))
-        }    }
-    
-    private func loadLights() {
-        let lightObjects = asset?.childObjects(of: MDLLight.self) as? [MDLLight] ?? []
-        for light in lightObjects {
-            let transform = light.transform?.matrix ?? matrix_identity_float4x4
-            let position = vec3f(transform.columns.3.x,
-                                 transform.columns.3.y,
-                                 transform.columns.3.z)
-            let defaultColor = vec3f(1.0, 1.0, 1.0)
-            let lightType: ModelLight.LightType
-            let lightClassName = String(describing: type(of: light))
-            switch lightClassName {
-            case "MDLPhysicallyPlausibleLight":
-                lightType = .directional
-            case "MDLAreaLight":
-                lightType = .area
-            case "MDLPhotometricLight":
-                lightType = .spot
-            default:
-                lightType = .point
-            }
-            let lightName = (light as MDLNamed).name.isEmpty ?
-            "Light_\(lights.count + 1)" : (light as MDLNamed).name
-            lights.append(ModelLight(
-                name: lightName,
-                type: lightType,
-                color: defaultColor,
-                intensity: 1.0,
-                position: position,
-                direction: lightType == .directional ? vec3f(0, 0, -1) : nil
-            ))
-        }
-    }
-    
+
     public func printAllComponents() {
-        print("\n=== Model Component Summary ===")
+        print("\n=== Model Components ===")
         if let asset = asset {
             print("Frame Interval: \(asset.frameInterval)")
             print("Time Range: \(asset.startTime) to \(asset.endTime)")
@@ -348,130 +208,143 @@ class Model3D {
             }
         }
         print("\nMeshes: \(meshes.count)")
-        for (index, mesh) in meshes.enumerated() {
-            let name = (mesh as MDLNamed).name
-            let meshName = name.isEmpty ? "Mesh_\(index + 1)" : name
-            print("  \(index + 1). \(meshName) - Vertices: \(mesh.vertexCount)")
+        for (i, mesh) in meshes.enumerated() {
+            let name = (mesh as MDLNamed).name.isEmpty ? "Mesh_\(i + 1)" : (mesh as MDLNamed).name
+            print("  \(i + 1). \(name) - Vertices: \(mesh.vertexCount)")
         }
         print("\nSkeleton:")
         if let skeleton = skeleton {
-            let totalJoints = skeleton.jointPaths.count
-            let jointsToPrint = min(totalJoints, 5)
-            print("  Joints: \(totalJoints)")
-            for i in 0..<jointsToPrint {
-                print("  \(i + 1). \(skeleton.jointPaths[i])")
-            }
-            if totalJoints > jointsToPrint {
-                print("  ...")
+            let jointCount = skeleton.jointPaths.count
+            print("  Total Joints: \(jointCount)")
+            for (i, jointPath) in skeleton.jointPaths.enumerated() {
+                if i >= 5 { break }
+                print("  \(i + 1). \(jointPath)")
             }
         } else {
             print("  No skeleton found")
         }
         print("\nAnimations: \(animations.count)")
-        for (index, animation) in animations.enumerated() {
-            print("  \(index + 1). \(animation.name) - Duration: \(animation.duration)s, Frame Interval: \(animation.frameInterval)s")
+        for (i, anim) in animations.enumerated() {
+            print("  \(i + 1). \(anim.name) - Duration: \(anim.duration)s, Frame Interval: \(anim.frameInterval)s")
         }
-        print("\nCameras: \(cameras.count)")
-        for (index, camera) in cameras.enumerated() {
-            print("  \(index + 1). \(camera.name) - Position: (\(camera.position.x), \(camera.position.y), \(camera.position.z)), FOV: \(camera.fieldOfView)")
-        }
-        print("\nLights: \(lights.count)")
-        for (index, light) in lights.enumerated() {
-            print("  \(index + 1). \(light.name) - Type: \(light.type), Color: (\(light.color.x), \(light.color.y), \(light.color.z)), Position: (\(light.position.x), \(light.position.y), \(light.position.z))")
-        }
-        print("============================\n")
     }
-}
 
-extension Model3D{
     public func extractMeshData(from mdlMesh: MDLMesh) -> MeshData? {
         guard let vertexBuffer = mdlMesh.vertexBuffers.first else {
-            print("No vertex buffer found!")
+            print("❌ No vertex buffer found in mesh.")
             return nil
         }
         
-        let vertexData = vertexBuffer.map().bytes.assumingMemoryBound(to: Float.self)
         let vertexCount = mdlMesh.vertexCount
-        
         var vertices: [ModelVertex] = []
+        vertices.reserveCapacity(vertexCount)
         
-        guard let stride = mdlMesh.vertexDescriptor.layouts[0] as? MDLVertexBufferLayout else {
-            print("No vertex layout found!")
+        let bufferMap = vertexBuffer.map()
+        let vertexData = bufferMap.bytes
+        guard let layout = mdlMesh.vertexDescriptor.layouts[0] as? MDLVertexBufferLayout else {
+            print("❌ No valid layout found in vertex descriptor.")
             return nil
         }
+        let stride = layout.stride
         
-        let strideInFloats = stride.stride / MemoryLayout<Float>.stride
-        
-        for i in 0..<vertexCount {
-            let base = i * strideInFloats
-            
-            // Extract vertex attributes with proper offsets
-            let position = SIMD3<Float>(
-                vertexData[base],
-                vertexData[base + 1],
-                vertexData[base + 2]
-            )
-            
-            let normal = SIMD3<Float>(
-                vertexData[base + 3],
-                vertexData[base + 4],
-                vertexData[base + 5]
-            )
-            
-            let texCoord = SIMD2<Float>(
-                vertexData[base + 6],
-                vertexData[base + 7]
-            )
-            
-            let tangent = SIMD3<Float>(
-                vertexData[base + 8],
-                vertexData[base + 9],
-                vertexData[base + 10]
-            )
-            
-            let bitangent = SIMD3<Float>(
-                vertexData[base + 11],
-                vertexData[base + 12],
-                vertexData[base + 13]
-            )
-            
-            let jointIndices = SIMD4<Float>(
-                vertexData[base + 14],
-                vertexData[base + 15],
-                vertexData[base + 16],
-                vertexData[base + 17]
-            )
-            
-            let jointWeights = SIMD4<Float>(
-                vertexData[base + 18],
-                vertexData[base + 19],
-                vertexData[base + 20],
-                vertexData[base + 21]
-            )
-            
-            vertices.append(ModelVertex(
-                position: position,
-                normal: normal,
-                textureCoordinate: texCoord,
-                tangent: tangent,
-                bitangent: bitangent,
-                jointIndices: jointIndices,
-                jointWeights: jointWeights
-            ))
+        var attributeMap: [String: (offset: Int, format: MDLVertexFormat)] = [:]
+        for attribute in mdlMesh.vertexDescriptor.attributes as! [MDLVertexAttribute] {
+            attributeMap[attribute.name] = (Int(attribute.offset), attribute.format)
         }
         
-        // Extract indices
-        var indices: [UInt32] = []
+        for vertexIndex in 0..<vertexCount {
+            let baseAddress = vertexData.advanced(by: vertexIndex * stride)
+            var vertex = ModelVertex(
+                position: SIMD3<Float>.zero,
+                normal: SIMD3<Float>.zero,
+                textureCoordinate: SIMD2<Float>.zero,
+                tangent: SIMD3<Float>.zero,
+                bitangent: SIMD3<Float>.zero,
+                jointIndices: SIMD4<UInt16>(repeating: 0),
+                jointWeights: SIMD4<Float>(1, 0, 0, 0)
+            )
+            if let (offset, _) = attributeMap[MDLVertexAttributePosition] {
+                vertex.position = baseAddress.advanced(by: offset)
+                    .assumingMemoryBound(to: SIMD3<Float>.self).pointee
+            }
+            if let (offset, _) = attributeMap[MDLVertexAttributeNormal] {
+                vertex.normal = baseAddress.advanced(by: offset)
+                    .assumingMemoryBound(to: SIMD3<Float>.self).pointee
+            }
+            if let (offset, _) = attributeMap[MDLVertexAttributeTextureCoordinate] {
+                vertex.textureCoordinate = baseAddress.advanced(by: offset)
+                    .assumingMemoryBound(to: SIMD2<Float>.self).pointee
+            }
+            if let (offset, _) = attributeMap[MDLVertexAttributeTangent] {
+                vertex.tangent = baseAddress.advanced(by: offset)
+                    .assumingMemoryBound(to: SIMD3<Float>.self).pointee
+            }
+            if let (offset, _) = attributeMap[MDLVertexAttributeBitangent] {
+                vertex.bitangent = baseAddress.advanced(by: offset)
+                    .assumingMemoryBound(to: SIMD3<Float>.self).pointee
+            }
+            if let (offset, _) = attributeMap[MDLVertexAttributeJointIndices] {
+                // Read as SIMD4<Float> then convert to UInt16 values.
+                let rawIndices = baseAddress.advanced(by: offset)
+                    .assumingMemoryBound(to: SIMD4<Float>.self).pointee
+                vertex.jointIndices = SIMD4<UInt16>(UInt16(rawIndices.x),
+                                                    UInt16(rawIndices.y),
+                                                    UInt16(rawIndices.z),
+                                                    UInt16(rawIndices.w))
+            }
+            if let (offset, _) = attributeMap[MDLVertexAttributeJointWeights] {
+                let weights = baseAddress.advanced(by: offset)
+                    .assumingMemoryBound(to: SIMD4<Float>.self).pointee
+                let total = weights.x + weights.y + weights.z + weights.w
+                vertex.jointWeights = total > 0 ? weights / total : SIMD4<Float>(1, 0, 0, 0)
+            }
+            vertices.append(vertex)
+        }
         
-        for submesh in mdlMesh.submeshes as! [MDLSubmesh] {
-            let indexBuffer = submesh.indexBuffer
-            let indexData = indexBuffer.map().bytes.assumingMemoryBound(to: UInt32.self)
+        var indices: [UInt32] = []
+        // Process indices from every submesh.
+        for submesh in mdlMesh.submeshes ?? [] {
+            guard let mdlSubmesh = submesh as? MDLSubmesh else {
+                continue
+            }
+            let indexCount = mdlSubmesh.indexCount
+            let indexBuffer = mdlSubmesh.indexBuffer
+            let indexMap = indexBuffer.map()
+            let indexData = indexMap.bytes
             
-            let indexCount = submesh.indexCount
-            for i in 0..<indexCount {
-                indices.append(indexData[i])
+            switch mdlSubmesh.indexType {
+            case .uInt32:
+                let ptr = indexData.assumingMemoryBound(to: UInt32.self)
+                let submeshIndices = UnsafeBufferPointer(start: ptr, count: indexCount)
+                indices.append(contentsOf: submeshIndices)
+            case .uInt16:
+                let ptr = indexData.assumingMemoryBound(to: UInt16.self)
+                let submeshIndices = UnsafeBufferPointer(start: ptr, count: indexCount).map { UInt32($0) }
+                indices.append(contentsOf: submeshIndices)
+            case .uInt8:
+                let ptr = indexData.assumingMemoryBound(to: UInt8.self)
+                let submeshIndices = UnsafeBufferPointer(start: ptr, count: indexCount).map { UInt32($0) }
+                indices.append(contentsOf: submeshIndices)
+            @unknown default:
+                print("❌ Unsupported index type encountered in submesh.")
+                return nil
+            }
+            // Debug: Print submesh index data summary.
+            if let firstIndex = indices.last, indexCount > 0 {
+                print("✅ Submesh processed: index count = \(indexCount), first index = \(firstIndex)")
             }
         }
         
+        if let maxIndex = indices.max(), maxIndex >= vertices.count {
+            print("⚠️ WARNING: Extracted index out of range: \(maxIndex) >= \(vertices.count)")
+        }
+        
+        // Debug: Print first few indices for verification.
+        let sampleCount = min(10, indices.count)
+        if sampleCount > 0 {
+            print("🔍 Sample indices: \(indices.prefix(sampleCount))")
+        }
+        
         return MeshData(vertices: vertices, indices: indices)
-    }}
+    }
+}

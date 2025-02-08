@@ -9,14 +9,24 @@ import Foundation
 import simd
 
 
+// Unsigned integer vectors
+public typealias vec2u = SIMD2<UInt32>
+public typealias vec3u = SIMD3<UInt32>
+public typealias vec4u = SIMD4<UInt32>
 
-public typealias vec2i = SIMD2<Int>
-public typealias vec3i = SIMD3<Int>
+// Signed integer vectors
+public typealias vec2i = SIMD2<Int32>
+public typealias vec3i = SIMD3<Int32>
+
+// Floating point vectors
 public typealias vec2f = SIMD2<Float>
 public typealias vec3f = SIMD3<Float>
 public typealias vec4f = SIMD4<Float>
+
+// Matrix types
 public typealias mat3f = simd_float3x3
 public typealias mat4f = simd_float4x4
+
 
 public enum Axis {
     case x, y, z

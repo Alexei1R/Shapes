@@ -40,7 +40,7 @@ files=(
     "Engine/Renderer/Model.swift"
     # "Engine/Renderer/Animation.swift"
     # "Engine/Utils/Time.swift"
-    "Shaders/ModelShaders.metal"
+    # "Shaders/ModelShaders.metal"
     "Math/Math.swift"
 )
 

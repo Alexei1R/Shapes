@@ -57,14 +57,15 @@ class Drawable: NSObject {
                 if let firstMesh = model3D.meshes.first,
                    let meshData = model3D.extractMeshData(from: firstMesh) {
                     
+                    let vertices = meshData.vertices
+                    let indices = meshData.indices
                     
-                    var count = 0
-                    for vertex in meshData.vertices {
-                        print(vertex)
-                        count += 1
-                        if count >= 20 { break }
+                    
+                    let randomVertices = vertices.shuffled().prefix(5)
+                    for vertex in randomVertices {
+                        print("Vertex \(vertex)")
                     }
-                    
+
                     
                     vertexBuffer = MetalBuffer<ModelVertex>(
                         device: device,
