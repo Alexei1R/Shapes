@@ -20,6 +20,7 @@ public struct ModelVertex {
     var jointWeights: SIMD4<Float>
 }
 
+
 public struct MeshData {
     var vertices: [ModelVertex]
     var indices: [UInt32]
@@ -30,7 +31,9 @@ public struct ModelJoint {
     let path: String
     let bindTransform: simd_float4x4
     let restTransform: simd_float4x4
+    let parentIndex: Int? // Add parent reference
 }
+
 
 public struct ModelAnimation {
     let name: String
@@ -48,63 +51,63 @@ public class Model3D {
     private(set) var skeleton: MDLSkeleton?
     private(set) var joints: [ModelJoint] = []
     private(set) var animations: [ModelAnimation] = []
-
+    
     private let vertexDescriptor: MDLVertexDescriptor = {
         let descriptor = MDLVertexDescriptor()
         var offset = 0
-
+        
         descriptor.attributes[0] = MDLVertexAttribute(name: MDLVertexAttributePosition,
-                                                        format: .float3,
-                                                        offset: offset,
-                                                        bufferIndex: 0)
+                                                      format: .float3,
+                                                      offset: offset,
+                                                      bufferIndex: 0)
         offset += MemoryLayout<SIMD3<Float>>.stride
-
+        
         // Normal (Float3)
         descriptor.attributes[1] = MDLVertexAttribute(name: MDLVertexAttributeNormal,
-                                                        format: .float3,
-                                                        offset: offset,
-                                                        bufferIndex: 0)
+                                                      format: .float3,
+                                                      offset: offset,
+                                                      bufferIndex: 0)
         offset += MemoryLayout<SIMD3<Float>>.stride
-
+        
         // Texture Coordinate (Float2)
         descriptor.attributes[2] = MDLVertexAttribute(name: MDLVertexAttributeTextureCoordinate,
-                                                        format: .float2,
-                                                        offset: offset,
-                                                        bufferIndex: 0)
+                                                      format: .float2,
+                                                      offset: offset,
+                                                      bufferIndex: 0)
         offset += MemoryLayout<SIMD2<Float>>.stride
-
+        
         // Tangent (Float3)
         descriptor.attributes[3] = MDLVertexAttribute(name: MDLVertexAttributeTangent,
-                                                        format: .float3,
-                                                        offset: offset,
-                                                        bufferIndex: 0)
+                                                      format: .float3,
+                                                      offset: offset,
+                                                      bufferIndex: 0)
         offset += MemoryLayout<SIMD3<Float>>.stride
-
+        
         // Bitangent (Float3)
         descriptor.attributes[4] = MDLVertexAttribute(name: MDLVertexAttributeBitangent,
-                                                        format: .float3,
-                                                        offset: offset,
-                                                        bufferIndex: 0)
+                                                      format: .float3,
+                                                      offset: offset,
+                                                      bufferIndex: 0)
         offset += MemoryLayout<SIMD3<Float>>.stride
-
+        
         // Joint Indices (Float4; will convert to UInt16 when extracting)
         descriptor.attributes[5] = MDLVertexAttribute(name: MDLVertexAttributeJointIndices,
-                                                        format: .float4,
-                                                        offset: offset,
-                                                        bufferIndex: 0)
+                                                      format: .float4,
+                                                      offset: offset,
+                                                      bufferIndex: 0)
         offset += MemoryLayout<SIMD4<Float>>.stride
-
+        
         // Joint Weights (Float4)
         descriptor.attributes[6] = MDLVertexAttribute(name: MDLVertexAttributeJointWeights,
-                                                        format: .float4,
-                                                        offset: offset,
-                                                        bufferIndex: 0)
+                                                      format: .float4,
+                                                      offset: offset,
+                                                      bufferIndex: 0)
         offset += MemoryLayout<SIMD4<Float>>.stride
-
+        
         descriptor.layouts[0] = MDLVertexBufferLayout(stride: offset)
         return descriptor
     }()
-
+    
     public func load(from url: URL, preserveTopology: Bool = false) throws {
         guard let device = MTLCreateSystemDefaultDevice() else {
             throw ModelLoaderError.failedToLoadAsset("No Metal device available.")
@@ -126,7 +129,7 @@ public class Model3D {
         loadSkeleton()
         loadAnimations()
     }
-
+    
     private func loadMeshes() throws {
         guard let foundMeshes = asset?.childObjects(of: MDLMesh.self) as? [MDLMesh] else {
             throw ModelLoaderError.invalidMesh
@@ -139,13 +142,13 @@ public class Model3D {
                 }
                 if !attributes.contains(where: { $0.name == MDLVertexAttributeTangent }) {
                     mesh.addTangentBasis(forTextureCoordinateAttributeNamed: MDLVertexAttributeTextureCoordinate,
-                                           tangentAttributeNamed: MDLVertexAttributeTangent,
-                                           bitangentAttributeNamed: MDLVertexAttributeBitangent)
+                                         tangentAttributeNamed: MDLVertexAttributeTangent,
+                                         bitangentAttributeNamed: MDLVertexAttributeBitangent)
                 }
             }
         }
     }
-
+    
     private func loadSkeleton() {
         guard let asset = asset else { return }
         if let skeletons = asset.childObjects(of: MDLSkeleton.self) as? [MDLSkeleton],
@@ -154,19 +157,35 @@ public class Model3D {
             let paths = firstSkeleton.jointPaths
             let bindTransforms = firstSkeleton.jointBindTransforms
             let restTransforms = firstSkeleton.jointRestTransforms
-            let jointCount = paths.count
-            for i in 0..<jointCount {
+            
+            var pathToIndex = [String: Int]()
+            
+            // First pass to map paths
+            for (index, path) in paths.enumerated() {
+                pathToIndex[path as String] = index
+            }
+            
+            // Second pass to build hierarchy
+            for (index, path) in paths.enumerated() {
+                let components = (path as String).components(separatedBy: "/")
+                let parentPath = components.dropLast().joined(separator: "/")
+                let parentIndex = pathToIndex[parentPath]
+                
                 let joint = ModelJoint(
-                    name: (paths[i] as NSString).lastPathComponent,
-                    path: paths[i],
-                    bindTransform: bindTransforms.float4x4Array[i],
-                    restTransform: restTransforms.float4x4Array[i]
+                    name: (path as NSString).lastPathComponent,
+                    path: path as String,
+                    bindTransform: bindTransforms.float4x4Array[index],
+                    restTransform: restTransforms.float4x4Array[index],
+                    parentIndex: parentIndex
                 )
                 joints.append(joint)
             }
+            print("✅ Loaded \(joints.count) joints with hierarchy")
         }
     }
-
+    
+    
+    
     private func loadAnimations() {
         guard let asset = asset else { return }
         if let animationObjects = asset.animations.objects as? [MDLPackedJointAnimation] {
@@ -194,7 +213,7 @@ public class Model3D {
             }
         }
     }
-
+    
     public func printAllComponents() {
         print("\n=== Model Components ===")
         if let asset = asset {
@@ -225,7 +244,7 @@ public class Model3D {
             print("  \(i + 1). \(anim.name) - Duration: \(anim.duration)s, Frame Interval: \(anim.frameInterval)s")
         }
     }
-
+    
     public func extractMeshData(from mdlMesh: MDLMesh) -> MeshData? {
         guard let vertexBuffer = mdlMesh.vertexBuffers.first else {
             print("❌ No vertex buffer found in mesh.")
