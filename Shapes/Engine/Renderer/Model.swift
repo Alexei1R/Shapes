@@ -49,13 +49,10 @@ public class Model3D {
     private(set) var joints: [ModelJoint] = []
     private(set) var animations: [ModelAnimation] = []
 
-    // Create a vertex descriptor that defines our ModelVertex layout.
-    // We store joint indices as float4 and later convert them to UInt16.
     private let vertexDescriptor: MDLVertexDescriptor = {
         let descriptor = MDLVertexDescriptor()
         var offset = 0
 
-        // Position (Float3)
         descriptor.attributes[0] = MDLVertexAttribute(name: MDLVertexAttributePosition,
                                                         format: .float3,
                                                         offset: offset,
@@ -337,12 +334,6 @@ public class Model3D {
         
         if let maxIndex = indices.max(), maxIndex >= vertices.count {
             print("⚠️ WARNING: Extracted index out of range: \(maxIndex) >= \(vertices.count)")
-        }
-        
-        // Debug: Print first few indices for verification.
-        let sampleCount = min(10, indices.count)
-        if sampleCount > 0 {
-            print("🔍 Sample indices: \(indices.prefix(sampleCount))")
         }
         
         return MeshData(vertices: vertices, indices: indices)

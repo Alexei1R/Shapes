@@ -8,8 +8,7 @@
 import Foundation
 import MetalKit
 
-
-class Drawable: NSObject {
+class Drawable: NSObject, ObservableObject {
     let device: MTLDevice
     var commandQueue: MTLCommandQueue!
     var pipelineState: MTLRenderPipelineState!
@@ -44,7 +43,6 @@ class Drawable: NSObject {
         loadMesh()
     }
     
-    
     private func loadMesh() {
         if let modelPath = Bundle.main.path(forResource: "girl", ofType: "usdc") {
             let modelURL = URL(fileURLWithPath: modelPath)
@@ -60,12 +58,10 @@ class Drawable: NSObject {
                     let vertices = meshData.vertices
                     let indices = meshData.indices
                     
-                    
                     let randomVertices = vertices.shuffled().prefix(5)
                     for vertex in randomVertices {
-                        print("Vertex \(vertex)")
+                        print("Vertex \(vertex.jointIndices)  \(vertex.jointWeights)")
                     }
-
                     
                     vertexBuffer = MetalBuffer<ModelVertex>(
                         device: device,
@@ -155,7 +151,6 @@ class Drawable: NSObject {
             print("Shader loading error: \(error)")
         }
         
-        
         let vertexLayout = BufferLayout(elements: [
             BufferElement(type: .float3, name: "position"),
             BufferElement(type: .float3, name: "normal"),
@@ -165,7 +160,6 @@ class Drawable: NSObject {
             BufferElement(type: .float4, name: "indices"),
             BufferElement(type: .float4, name: "weight")
         ])
-        
         
         pipelineDescriptor.vertexDescriptor = vertexLayout.metalVertexDescriptor(bufferIndex: 0)
         pipelineDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
@@ -182,6 +176,16 @@ class Drawable: NSObject {
         depthStencilDescriptor.isDepthWriteEnabled = true
         depthStencilState = device.makeDepthStencilState(descriptor: depthStencilDescriptor)
     }
+    
+    func start() {
+        print("start")
+    }
+    
+    
+    func stop() {
+        print("stop")
+    }
+    
 }
 
 extension Drawable: MTKViewDelegate {
@@ -199,13 +203,15 @@ extension Drawable: MTKViewDelegate {
         time.update()
         
         if EventManager.shared.isActive, let event = EventManager.shared.currentEvent {
-            rotationY += Float(event.delta.x) * 0.005
-            rotationX += Float(event.delta.y) * 0.005
+            // Update camera rotation instead of model rotation
+            camera.orbit(
+                deltaTheta: Float(event.delta.x) * -0.005, // Negative for intuitive horizontal rotation
+                deltaPhi: Float(event.delta.y) * -0.005    // Negative for intuitive vertical rotation
+            )
         }
         
+        // Model stays static now
         model = mat4f.identity
-            .rotate(rotationX, axis: .x)
-            .rotate(rotationY, axis: .y)
         
         var uniforms = Uniforms(
             viewProjectionMatrix: camera.getViewProjectionMatrix(),
@@ -231,5 +237,5 @@ extension Drawable: MTKViewDelegate {
         commandBuffer.present(drawableTarget)
         commandBuffer.commit()
     }
+    
 }
-

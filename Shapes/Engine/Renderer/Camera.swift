@@ -14,6 +14,11 @@ public class Camera {
     private var target: vec3f
     private var up: vec3f
     
+    // Spherical coordinates for orbiting
+    private var radius: Float
+    private var phi: Float    // Vertical angle (elevation)
+    private var theta: Float  // Horizontal angle (azimuth)
+    
     // Projection properties
     private var fieldOfView: Float
     private var aspectRatio: Float
@@ -43,6 +48,11 @@ public class Camera {
         self.viewMatrix = .identity
         self.projectionMatrix = .identity
         
+        // Initialize orbital parameters
+        let offset = position - target
+        self.radius = length(offset)
+        self.phi = asin(offset.y / self.radius)
+        self.theta = atan2(offset.x, offset.z)
         
         //Update Matrices
         updateViewMatrix()
@@ -50,6 +60,13 @@ public class Camera {
     }
     
     private func updateViewMatrix() {
+        // Calculate camera position based on spherical coordinates
+        position = target + vec3f(
+            radius * cos(phi) * sin(theta),
+            radius * sin(phi),
+            radius * cos(phi) * cos(theta)
+        )
+        
         let normalizedUp = normalize(up)
         viewMatrix = .lookAt(eye: position, target: target, up: normalizedUp)
     }
@@ -78,6 +95,21 @@ public class Camera {
     }
     
     // MARK: - Camera Control
+    
+    public func orbit(deltaTheta: Float, deltaPhi: Float) {
+        theta += deltaTheta
+        phi += deltaPhi
+        
+        // Clamp phi to avoid camera flipping
+        phi = min(max(phi, -Float.pi / 2 + 0.1), Float.pi / 2 - 0.1)
+        
+        updateViewMatrix()
+    }
+    
+    public func zoom(factor: Float) {
+        radius = max(1.0, radius * factor)
+        updateViewMatrix()
+    }
     
     public func setPosition(_ newPosition: vec3f) {
         position = newPosition
@@ -113,5 +145,4 @@ public class Camera {
         farPlane = far
         updateProjectionMatrix()
     }
-    
 }
