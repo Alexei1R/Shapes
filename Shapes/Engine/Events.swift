@@ -12,8 +12,8 @@ enum TouchEventType {
     case drag(DragGesture.Value)
     case tap(CGPoint)
     case longPress(CGPoint)
-    case pinch(scale: CGFloat)
-    case rotate(angle: Angle)
+    case pinch(MagnificationGesture.Value)
+    case rotate(Angle)
     
     var position: CGPoint {
         switch self {
@@ -27,41 +27,60 @@ enum TouchEventType {
 
 struct Event {
     let type: TouchEventType
-    var delta: CGPoint = .zero
+    var delta: CGPoint
+    var scale: CGFloat
+    
+    init(type: TouchEventType, delta: CGPoint = .zero, scale: CGFloat = 1.0) {
+        self.type = type
+        self.delta = delta
+        self.scale = scale
+    }
 }
 
 final class EventManager: ObservableObject {
-    static let shared = EventManager() // Singleton instance
+    static let shared = EventManager()
     
     @Published private(set) var currentEvent: Event?
     @Published private(set) var isActive: Bool = false
     
     private var previousLocation: CGPoint = .zero
+    private var previousScale: CGFloat = 1.0
     
     func process(_ event: Event) {
-        currentEvent = event
+        var processedEvent = event
         isActive = true
         
-        if case .drag(let value) = event.type {
+        switch event.type {
+        case .drag(let value):
             let currentLocation = value.location
             if previousLocation != .zero {
-                currentEvent?.delta = CGPoint(
-                    x: currentLocation.x - previousLocation.x,
-                    y: currentLocation.y - previousLocation.y
+                processedEvent.delta = CGPoint(
+                    x: (currentLocation.x - previousLocation.x) ,
+                    y: (currentLocation.y - previousLocation.y)
                 )
             }
             previousLocation = currentLocation
-        } else {
+            
+        case .pinch(let value):
+            let scaleDelta = value / previousScale
+            let zoomFactor = 1.0 + (1.0 - scaleDelta)
+            
+            processedEvent.scale = zoomFactor
+            previousScale = value
+            
+        default:
             previousLocation = .zero
         }
         
+        currentEvent = processedEvent
     }
     
     func endProcess() {
         isActive = false
         previousLocation = .zero
+        previousScale = 1.0
+        currentEvent = nil
     }
-    
 }
 
 struct EventHandlingViewModifier: ViewModifier {
@@ -73,6 +92,15 @@ struct EventHandlingViewModifier: ViewModifier {
                 DragGesture(minimumDistance: 0)
                     .onChanged { manager.process(Event(type: .drag($0))) }
                     .onEnded { _ in manager.endProcess() }
+            )
+            .simultaneousGesture(
+                MagnificationGesture()
+                    .onChanged { scale in
+                        manager.process(Event(type: .pinch(scale)))
+                    }
+                    .onEnded { _ in
+                        manager.endProcess()
+                    }
             )
             .simultaneousGesture(
                 TapGesture()
@@ -90,118 +118,3 @@ extension View {
         modifier(EventHandlingViewModifier(manager: manager))
     }
 }
-
-
-//import SwiftUI
-//import Combine
-//
-//enum TouchEventType {
-//    case drag(start: CGPoint, current: CGPoint)
-//    case tap(CGPoint)
-//    case longPress(CGPoint)
-//    
-//    var position: CGPoint {
-//        switch self {
-//        case .drag(_, let current): return current
-//        case .tap(let pos), .longPress(let pos): return pos
-//        }
-//    }
-//}
-//
-//struct Event {
-//    let type: TouchEventType
-//    var delta: CGSize = .zero
-//}
-//
-//final class EventManager: ObservableObject {
-//    static let shared = EventManager()
-//    
-//    @Published private(set) var currentEvent: Event?
-//    @Published private(set) var isActive = false
-//    private var dragStartLocation: CGPoint?
-//    
-//    func process(_ event: Event) {
-//        switch event.type {
-//        case .drag(let start, let current):
-//            handleDrag(start: start, current: current)
-//        default:
-//            currentEvent = event
-//            isActive = true
-//        }
-//    }
-//    
-//    private func handleDrag(start: CGPoint, current: CGPoint) {
-//        let delta = CGSize(
-//            width: current.x - (dragStartLocation?.x ?? start.x),
-//            height: current.y - (dragStartLocation?.y ?? start.y)
-//        )
-//        
-//        currentEvent = Event(
-//            type: .drag(start: start, current: current),
-//            delta: delta
-//        )
-//        dragStartLocation = current
-//        isActive = true
-//    }
-//    
-//    func endProcess() {
-//        isActive = false
-//        dragStartLocation = nil
-//        currentEvent = nil
-//    }
-//}
-//
-//struct EventHandlingViewModifier: ViewModifier {
-//    @ObservedObject var manager: EventManager
-//    @State private var dragState: CGPoint?
-//    
-//    func body(content: Content) -> some View {
-//        content
-//            .gesture(dragGesture)
-//            .gesture(tapGesture)
-//            .gesture(longPressGesture)
-//    }
-//    
-//    private var dragGesture: some Gesture {
-//        DragGesture(minimumDistance: 1)
-//            .onChanged { value in
-//                let start = value.startLocation
-//                let current = value.location
-//                if dragState == nil {
-//                    dragState = start
-//                }
-//                manager.process(Event(
-//                    type: .drag(start: start, current: current),
-//                    delta: value.translation
-//                ))
-//            }
-//            .onEnded { value in
-//                dragState = nil
-//                manager.endProcess()
-//            }
-//    }
-//    
-//    private var tapGesture: some Gesture {
-//        SpatialTapGesture()
-//            .onEnded { value in
-//                manager.process(Event(type: .tap(value.location)))
-//                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-//                    manager.endProcess()
-//                }
-//            }
-//    }
-//    
-//    private var longPressGesture: some Gesture {
-//        LongPressGesture()
-//            .onEnded { value in
-//                manager.process(Event(type: .longPress(.zero)))
-//                manager.endProcess()
-//            }
-//    }
-//}
-//
-//extension View {
-//    func handleEvents(using manager: EventManager) -> some View {
-//        modifier(EventHandlingViewModifier(manager: manager))
-//    }
-//}

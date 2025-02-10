@@ -39,7 +39,7 @@ class Drawable: NSObject, ObservableObject {
         super.init()
         setupCamera()
         buildPipeline()
-        model = mat4f.identity.rotate(Float.pi / 4, axis: .x)
+        model = mat4f.identity.translate(vec3f.up * -60)
         loadMesh()
     }
     
@@ -111,7 +111,7 @@ class Drawable: NSObject, ObservableObject {
             texture: currentDrawable.texture,
             loadAction: .clear,
             storeAction: .store,
-            clearColor: MTLClearColor(red: 0.1, green: 0.3, blue: 0.3, alpha: 1)
+            clearColor: MTLClearColor(red: 0.1, green: 0.1, blue: 0.12, alpha: 1)
         )
         
         let depthAttachment = DepthAttachmentDescriptor(
@@ -202,16 +202,27 @@ extension Drawable: MTKViewDelegate {
         
         time.update()
         
+        
+        
+        
+        
         if EventManager.shared.isActive, let event = EventManager.shared.currentEvent {
-            // Update camera rotation instead of model rotation
-            camera.orbit(
-                deltaTheta: Float(event.delta.x) * -0.005, // Negative for intuitive horizontal rotation
-                deltaPhi: Float(event.delta.y) * -0.005    // Negative for intuitive vertical rotation
-            )
+            switch event.type {
+            case .drag:
+                camera.orbit(
+                    deltaTheta: Float(event.delta.x) * 0.005,
+                    deltaPhi: Float(event.delta.y) * 0.005
+                )
+            case .pinch:
+                camera.zoom(factor: Float(event.scale ))
+            default:
+                break
+            }
         }
         
+        
         // Model stays static now
-        model = mat4f.identity
+//        model = mat4f.identity
         
         var uniforms = Uniforms(
             viewProjectionMatrix: camera.getViewProjectionMatrix(),
