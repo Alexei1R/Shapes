@@ -17,12 +17,15 @@ struct VertexOut {
     float2 texCoords;
     float3 worldPos;
     float3 viewPos;
+    float3 weights;
 };
 
 struct Uniforms {
     float4x4 viewProjectionMatrix;
     float4x4 model;
     float time;
+    int jointIndex;
+    
 };
 
 vertex VertexOut model_vertex_main(
@@ -43,6 +46,7 @@ vertex VertexOut model_vertex_main(
     
     float4 viewPos = uniforms.viewProjectionMatrix * worldPosition;
     out.viewPos = viewPos.xyz / viewPos.w;
+    out.weights =  in.jointWeights.xyz;
     
     return out;
 }
@@ -65,6 +69,8 @@ fragment float4 model_fragment_main(VertexOut in [[stage_in]]) {
     float3 specular = lightColor * spec * 0.5;
     
     float3 finalColor = ambient + diffuse + specular;
+    
+    finalColor = mix(finalColor , in.weights, 0.5);
     
     return float4(finalColor, 1.0);
 }

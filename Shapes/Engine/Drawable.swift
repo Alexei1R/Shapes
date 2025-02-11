@@ -19,11 +19,13 @@ class Drawable: NSObject, ObservableObject {
     private var renderPassDescriptor: RenderPassDescriptor?
     
     var girlModel: Model3D?
+    var jointIndex : Int = 0
     
     struct Uniforms {
         var viewProjectionMatrix: mat4f
         var model: mat4f
         var time: Float
+        var jointIndex: Int
     }
     
     var vertexBuffer: MetalBuffer<ModelVertex>!
@@ -39,12 +41,14 @@ class Drawable: NSObject, ObservableObject {
         super.init()
         setupCamera()
         buildPipeline()
-        model = mat4f.identity.translate(vec3f.up * -60)
+//        model = mat4f.identity.translate(vec3f.up * -60)
+        model = mat4f.identity.translate(vec3f.up * -60).scale(vec3f.one * 50)
         loadMesh()
     }
     
     private func loadMesh() {
-        if let modelPath = Bundle.main.path(forResource: "girl", ofType: "usdc") {
+//        if let modelPath = Bundle.main.path(forResource: "model", ofType: "usdz") {
+                if let modelPath = Bundle.main.path(forResource: "cube", ofType: "usdc") {
             let modelURL = URL(fileURLWithPath: modelPath)
             let model3D = Model3D()
             
@@ -58,8 +62,8 @@ class Drawable: NSObject, ObservableObject {
                     let vertices = meshData.vertices
                     let indices = meshData.indices
                     
-                    let randomVertices = vertices.shuffled().prefix(5)
-                    for vertex in randomVertices {
+//                    let randomVertices = vertices.shuffled().prefix(5)
+                    for vertex in vertices {
                         print("Vertex \(vertex.jointIndices)  \(vertex.jointWeights)")
                     }
                     
@@ -94,12 +98,14 @@ class Drawable: NSObject, ObservableObject {
             fieldOfView: Float.pi / 3,
             aspectRatio: 1.0,
             nearPlane: 0.1,
-            farPlane: 1000.0
+            farPlane: 10000.0
         )
         let uniforms = Uniforms(
             viewProjectionMatrix: camera.getViewProjectionMatrix(),
             model: model,
-            time: 0.0
+            time: time.now,
+            jointIndex: jointIndex
+            
         )
         uniformsBuffer = MetalBuffer<Uniforms>(device: device, element: uniforms, usage: .uniforms)
     }
@@ -178,12 +184,15 @@ class Drawable: NSObject, ObservableObject {
     }
     
     func start() {
-        print("start")
+        print("start \(jointIndex)")
+        jointIndex -= 1
     }
     
     
     func stop() {
-        print("stop")
+        print("stop \(jointIndex)")
+        
+        jointIndex += 1
     }
     
 }
@@ -215,6 +224,7 @@ extension Drawable: MTKViewDelegate {
                 )
             case .pinch:
                 camera.zoom(factor: Float(event.scale ))
+                
             default:
                 break
             }
@@ -227,7 +237,7 @@ extension Drawable: MTKViewDelegate {
         var uniforms = Uniforms(
             viewProjectionMatrix: camera.getViewProjectionMatrix(),
             model: model,
-            time: time.now
+            time: time.now, jointIndex: jointIndex
         )
         memcpy(uniformsBuffer.contents(), &uniforms, MemoryLayout<Uniforms>.size)
         

@@ -20,7 +20,7 @@ class AnimationManager {
     private(set) var state: AnimationState = .stopped
     private var currentAnimationIndex: Int?
     private var currentTime: TimeInterval = 0.0
-
+    
     init(model: Model3D) {
         self.model = model
     }
@@ -56,8 +56,10 @@ class AnimationManager {
         print("Stopped animation.")
     }
     
-    func update(deltaTime: TimeInterval) {
-        guard state == .playing, let animationIndex = currentAnimationIndex else { return }
+    func update(deltaTime: TimeInterval) -> [mat4f]{
+        guard state == .playing, let animationIndex = currentAnimationIndex else {
+            fatalError("Incorect animation index")
+        }
         
         let animation = model.animations[animationIndex]
         currentTime += deltaTime
@@ -69,11 +71,16 @@ class AnimationManager {
         
         // Ensure there is at least one keyframe.
         let totalFrames = animation.translations.count
-        guard totalFrames > 0 else { return }
+        guard totalFrames > 0 else {             fatalError("Incorect animation index")
+        }
         
         
-     
+        
         //interpolate beetween joints transforms ,and make shure that the animations is played corectrly
         
+        
+        
+        // TODO: Remove this line when finish the function
+        return [mat4f.identity]
     }
 }

@@ -145,4 +145,15 @@ public class Camera {
         farPlane = far
         updateProjectionMatrix()
     }
+    
+    public func moveInPlane(deltaX: Float, deltaY: Float) {
+        let right = normalize(cross(target - position, up))
+        let forward = normalize(cross(up, right))
+        
+        let movement = right * deltaX + forward * deltaY
+        position += movement
+        target += movement
+        
+        updateViewMatrix()
+    }
 }
