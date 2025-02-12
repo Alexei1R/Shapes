@@ -1,11 +1,3 @@
-//
-//  Drawable.swift
-//  Shapes
-//
-//  Created by rusu alexei on 04.02.2025.
-//
-
-
 import Foundation
 import MetalKit
 
@@ -21,6 +13,8 @@ class Drawable: NSObject, ObservableObject {
     
     var modelAsset: Model3D?
     @Published var currentJointIndex: Int = 0
+    private var animationManager: AnimationManager?
+    private var jointMatricesBuffer: MetalBuffer<mat4f>?
     
     struct Uniforms {
         var viewProjectionMatrix: mat4f
@@ -39,12 +33,12 @@ class Drawable: NSObject, ObservableObject {
         super.init()
         setupCamera()
         buildPipeline()
-        model = mat4f.identity.translate(vec3f.up * -60).scale(vec3f.one * 50)
+        model = mat4f.identity.scale(vec3f.one * 0.3)
         loadMesh()
     }
     
     private func loadMesh() {
-        if let modelPath = Bundle.main.path(forResource: "cube", ofType: "usdc") {
+        if let modelPath = Bundle.main.path(forResource: "girl", ofType: "usdc") {
             let modelURL = URL(fileURLWithPath: modelPath)
             let model3D = Model3D()
             
@@ -54,12 +48,6 @@ class Drawable: NSObject, ObservableObject {
                 
                 if let firstMesh = model3D.meshes.first,
                    let meshData = model3D.extractMeshData(from: firstMesh) {
-                    
-                    
-                    for vertex in meshData.vertices {
-                        print(" \(vertex) ")
-                    }
-                    
                     vertexBuffer = MetalBuffer<ModelVertex>(
                         device: device,
                         elements: meshData.vertices,
@@ -75,6 +63,19 @@ class Drawable: NSObject, ObservableObject {
                 
                 modelAsset = model3D
                 
+                // Initialize animation manager and joint matrices buffer
+                animationManager = AnimationManager(model: model3D)
+                jointMatricesBuffer = MetalBuffer<mat4f>(
+                    device: device,
+                    elements: Array(repeating: mat4f.identity, count: model3D.joints.count),
+                    usage: .storageShared
+                )
+                
+                // Start playing the first animation if available
+                if !model3D.animations.isEmpty {
+                    animationManager?.play(animationIndex: 0)
+                }
+                
             } catch {
                 print("Failed to load model: \(error)")
             }
@@ -85,7 +86,7 @@ class Drawable: NSObject, ObservableObject {
     
     private func setupCamera() {
         camera = Camera(
-            position: SIMD3(0, 1, -400),
+            position: SIMD3(0, 1, -200),
             target: SIMD3(0, 0, 0),
             up: SIMD3(0, 1, 0),
             fieldOfView: Float.pi / 3,
@@ -158,7 +159,7 @@ class Drawable: NSObject, ObservableObject {
             BufferElement(type: .uint16x4, name: "indices"),
             BufferElement(type: .float4, name: "weight")
         ])
-
+        
         pipelineDescriptor.vertexDescriptor = vertexLayout.metalVertexDescriptor(bufferIndex: 0)
         pipelineDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
         pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float
@@ -186,6 +187,20 @@ class Drawable: NSObject, ObservableObject {
         currentJointIndex = max(0, currentJointIndex - 1)
     }
     
+    func toggleAnimation() {
+        if let manager = animationManager {
+            switch manager.state {
+            case .playing:
+                manager.pause()
+            case .paused:
+                manager.resume()
+            case .stopped:
+                if !(modelAsset?.animations.isEmpty  ?? true ){
+                    manager.play(animationIndex: 0)
+                }
+            }
+        }
+    }
 }
 
 extension Drawable: MTKViewDelegate {
@@ -202,6 +217,7 @@ extension Drawable: MTKViewDelegate {
         
         time.update()
         
+        // Handle camera controls
         if EventManager.shared.isActive, let event = EventManager.shared.currentEvent {
             switch event.type {
             case .drag:
@@ -216,20 +232,31 @@ extension Drawable: MTKViewDelegate {
             }
         }
         
+        // Update animation state
+        if let manager = animationManager {
+            let jointMatrices = manager.update(deltaTime: time.deltaTime)
+            memcpy(jointMatricesBuffer?.contents(), jointMatrices, MemoryLayout<mat4f>.size * jointMatrices.count)
+        }
+        
+        // Update uniforms
         var uniforms = Uniforms(
             viewProjectionMatrix: camera.getViewProjectionMatrix(),
             modelMatrix: model,
             time: time.now,
             selectedJointIndex: Int32(currentJointIndex)
         )
-        
         memcpy(uniformsBuffer.contents(), &uniforms, MemoryLayout<Uniforms>.size)
         
+        // Set render state
         renderEncoder.setRenderPipelineState(pipelineState)
         renderEncoder.setDepthStencilState(depthStencilState)
-        uniformsBuffer.bind(to: renderEncoder, type: .vertex, index: 1)
-        vertexBuffer.bind(to: renderEncoder, type: .vertex, index: 0)
         
+        // Bind buffers
+        vertexBuffer.bind(to: renderEncoder, type: .vertex, index: 0)
+        uniformsBuffer.bind(to: renderEncoder, type: .vertex, index: 1)
+        jointMatricesBuffer?.bind(to: renderEncoder, type: .vertex, index: 2)
+        
+        // Draw
         renderEncoder.drawIndexedPrimitives(
             type: .triangle,
             indexCount: indexBuffer.count,

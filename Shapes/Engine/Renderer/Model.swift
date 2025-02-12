@@ -233,7 +233,7 @@ public class Model3D {
             let jointCount = skeleton.jointPaths.count
             print("  Total Joints: \(jointCount)")
             for (i, jointPath) in skeleton.jointPaths.enumerated() {
-//                if i >= 5 { break }
+                if i >= 5 { break }
                 print("  \(i + 1). \(jointPath)")
             }
         } else {

@@ -11,8 +11,6 @@ struct ModelVertexIn {
     float4 jointWeights [[attribute(6)]];
 };
 
-
-
 struct VertexOut {
     float4 position [[position]];
     float3 normal;
@@ -29,34 +27,55 @@ struct Uniforms {
     int jointIndex;
 };
 
+constant int MAX_JOINTS = 65;
+
 vertex VertexOut model_vertex_main(
     ModelVertexIn in [[stage_in]],
-    constant Uniforms &uniforms [[buffer(1)]]
+    constant Uniforms &uniforms [[buffer(1)]],
+    constant float4x4 *jointMatrices [[buffer(2)]]
 ) {
     VertexOut out;
     
-    float4 worldPosition = uniforms.model * float4(in.position, 1.0);
+    // Calculate skinned position
+    float4 skinnedPosition = float4(0.0);
+    float4 skinnedNormal = float4(0.0);
+    
+    for(int i = 0; i < 4; i++) {
+        int jointIndex = int(in.jointIndices[i]);
+        float weight = in.jointWeights[i];
+        
+        if(jointIndex >= 0 && jointIndex < MAX_JOINTS && weight > 0.0) {
+            float4x4 jointMatrix = jointMatrices[jointIndex];
+            skinnedPosition += (jointMatrix * float4(in.position, 1.0)) * weight;
+            skinnedNormal += (jointMatrix * float4(in.normal, 0.0)) * weight;
+        }
+    }
+    
+    // Ensure w component is 1.0 for position
+    skinnedPosition.w = 1.0;
+    
+    float4 worldPosition = uniforms.model * skinnedPosition;
     out.position = uniforms.viewProjectionMatrix * worldPosition;
     out.worldPos = worldPosition.xyz;
     
     float3x3 normalMatrix = float3x3(uniforms.model[0].xyz,
                                    uniforms.model[1].xyz,
                                    uniforms.model[2].xyz);
-    out.normal = normalize(normalMatrix * in.normal);
+    out.normal = normalize(normalMatrix * skinnedNormal.xyz);
     out.texCoords = in.texCoords;
     
     float4 viewPos = uniforms.viewProjectionMatrix * worldPosition;
     out.viewPos = viewPos.xyz / viewPos.w;
-   
-    // Get the weight for the selected joint
-    float weight = 0.0;
+    
+    // Highlight selected joint influence
+    float selectedWeight = 0.0;
     for (int i = 0; i < 4; i++) {
         if (int(in.jointIndices[i]) == uniforms.jointIndex) {
-            weight = in.jointWeights[i];
+            selectedWeight = in.jointWeights[i];
             break;
         }
     }
-    out.jointWeight = weight;
+    out.jointWeight = selectedWeight;
     
     return out;
 }
