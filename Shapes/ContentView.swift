@@ -19,27 +19,33 @@ struct ContentView: View {
             
             VStack {
                 Spacer()
-                HStack{
+                HStack {
                     Button(action: {
-                        drawable.start()
+                        drawable.selectPreviousJoint()
                     }) {
-                        Text("start")
+                        Text("Previous Joint")
                             .padding()
                             .background(Color.blue)
                             .foregroundColor(.white)
                             .cornerRadius(10)
                     }
+                    
+                    Text("Joint: \(drawable.currentJointIndex)")
+                        .padding()
+                        .background(Color.black.opacity(0.5))
+                        .foregroundColor(.white)
+                        .cornerRadius(5)
+                    
                     Button(action: {
-                        drawable.stop()
+                        drawable.selectNextJoint()
                     }) {
-                        Text("stop")
+                        Text("Next Joint")
                             .padding()
                             .background(Color.blue)
                             .foregroundColor(.white)
                             .cornerRadius(10)
                     }
                 }
-            
                 .padding()
             }
         }

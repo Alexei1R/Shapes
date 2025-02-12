@@ -7,9 +7,11 @@ struct ModelVertexIn {
     float2 texCoords [[attribute(2)]];
     float3 tangent [[attribute(3)]];
     float3 bitangent [[attribute(4)]];
-    float4 jointIndices [[attribute(5)]];
+    ushort4 jointIndices [[attribute(5)]];
     float4 jointWeights [[attribute(6)]];
 };
+
+
 
 struct VertexOut {
     float4 position [[position]];
@@ -17,7 +19,7 @@ struct VertexOut {
     float2 texCoords;
     float3 worldPos;
     float3 viewPos;
-    float3 weights;
+    float jointWeight;
 };
 
 struct Uniforms {
@@ -25,7 +27,6 @@ struct Uniforms {
     float4x4 model;
     float time;
     int jointIndex;
-    
 };
 
 vertex VertexOut model_vertex_main(
@@ -46,7 +47,16 @@ vertex VertexOut model_vertex_main(
     
     float4 viewPos = uniforms.viewProjectionMatrix * worldPosition;
     out.viewPos = viewPos.xyz / viewPos.w;
-    out.weights =  in.jointWeights.xyz;
+   
+    // Get the weight for the selected joint
+    float weight = 0.0;
+    for (int i = 0; i < 4; i++) {
+        if (int(in.jointIndices[i]) == uniforms.jointIndex) {
+            weight = in.jointWeights[i];
+            break;
+        }
+    }
+    out.jointWeight = weight;
     
     return out;
 }
@@ -70,7 +80,9 @@ fragment float4 model_fragment_main(VertexOut in [[stage_in]]) {
     
     float3 finalColor = ambient + diffuse + specular;
     
-    finalColor = mix(finalColor , in.weights, 0.5);
+    // Highlight vertices affected by the selected joint
+    float3 jointColor = float3(1.0, 0.0, 0.0); // Red for selected joint
+    finalColor = mix(finalColor, jointColor, in.jointWeight);
     
     return float4(finalColor, 1.0);
 }

@@ -5,6 +5,7 @@
 //  Created by rusu alexei on 04.02.2025.
 //
 
+
 import Foundation
 import MetalKit
 
@@ -18,14 +19,14 @@ class Drawable: NSObject, ObservableObject {
     private var time = Time()
     private var renderPassDescriptor: RenderPassDescriptor?
     
-    var girlModel: Model3D?
-    var jointIndex : Int = 0
+    var modelAsset: Model3D?
+    @Published var currentJointIndex: Int = 0
     
     struct Uniforms {
         var viewProjectionMatrix: mat4f
-        var model: mat4f
+        var modelMatrix: mat4f
         var time: Float
-        var jointIndex: Int
+        var selectedJointIndex: Int32
     }
     
     var vertexBuffer: MetalBuffer<ModelVertex>!
@@ -33,22 +34,17 @@ class Drawable: NSObject, ObservableObject {
     var uniformsBuffer: MetalBuffer<Uniforms>!
     let materialManager = MaterialManager()
     
-    var rotationX: Float = 0.0
-    var rotationY: Float = 0.0
-    
     init(device: MTLDevice) {
         self.device = device
         super.init()
         setupCamera()
         buildPipeline()
-//        model = mat4f.identity.translate(vec3f.up * -60)
         model = mat4f.identity.translate(vec3f.up * -60).scale(vec3f.one * 50)
         loadMesh()
     }
     
     private func loadMesh() {
-//        if let modelPath = Bundle.main.path(forResource: "model", ofType: "usdz") {
-                if let modelPath = Bundle.main.path(forResource: "cube", ofType: "usdc") {
+        if let modelPath = Bundle.main.path(forResource: "cube", ofType: "usdc") {
             let modelURL = URL(fileURLWithPath: modelPath)
             let model3D = Model3D()
             
@@ -59,12 +55,9 @@ class Drawable: NSObject, ObservableObject {
                 if let firstMesh = model3D.meshes.first,
                    let meshData = model3D.extractMeshData(from: firstMesh) {
                     
-                    let vertices = meshData.vertices
-                    let indices = meshData.indices
                     
-//                    let randomVertices = vertices.shuffled().prefix(5)
-                    for vertex in vertices {
-                        print("Vertex \(vertex.jointIndices)  \(vertex.jointWeights)")
+                    for vertex in meshData.vertices {
+                        print(" \(vertex) ")
                     }
                     
                     vertexBuffer = MetalBuffer<ModelVertex>(
@@ -80,7 +73,7 @@ class Drawable: NSObject, ObservableObject {
                     )
                 }
                 
-                girlModel = model3D
+                modelAsset = model3D
                 
             } catch {
                 print("Failed to load model: \(error)")
@@ -102,10 +95,9 @@ class Drawable: NSObject, ObservableObject {
         )
         let uniforms = Uniforms(
             viewProjectionMatrix: camera.getViewProjectionMatrix(),
-            model: model,
+            modelMatrix: model,
             time: time.now,
-            jointIndex: jointIndex
-            
+            selectedJointIndex: Int32(currentJointIndex)
         )
         uniformsBuffer = MetalBuffer<Uniforms>(device: device, element: uniforms, usage: .uniforms)
     }
@@ -163,10 +155,10 @@ class Drawable: NSObject, ObservableObject {
             BufferElement(type: .float2, name: "textureCoordinate"),
             BufferElement(type: .float3, name: "tangent"),
             BufferElement(type: .float3, name: "bitangent"),
-            BufferElement(type: .float4, name: "indices"),
+            BufferElement(type: .uint16x4, name: "indices"),
             BufferElement(type: .float4, name: "weight")
         ])
-        
+
         pipelineDescriptor.vertexDescriptor = vertexLayout.metalVertexDescriptor(bufferIndex: 0)
         pipelineDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
         pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float
@@ -183,16 +175,15 @@ class Drawable: NSObject, ObservableObject {
         depthStencilState = device.makeDepthStencilState(descriptor: depthStencilDescriptor)
     }
     
-    func start() {
-        print("start \(jointIndex)")
-        jointIndex -= 1
+    func selectNextJoint() {
+        if let model = modelAsset {
+            let maxJoint = model.joints.isEmpty ? 0 : model.joints.count - 1
+            currentJointIndex = min(maxJoint, currentJointIndex + 1)
+        }
     }
     
-    
-    func stop() {
-        print("stop \(jointIndex)")
-        
-        jointIndex += 1
+    func selectPreviousJoint() {
+        currentJointIndex = max(0, currentJointIndex - 1)
     }
     
 }
@@ -211,10 +202,6 @@ extension Drawable: MTKViewDelegate {
         
         time.update()
         
-        
-        
-        
-        
         if EventManager.shared.isActive, let event = EventManager.shared.currentEvent {
             switch event.type {
             case .drag:
@@ -223,22 +210,19 @@ extension Drawable: MTKViewDelegate {
                     deltaPhi: Float(event.delta.y) * 0.005
                 )
             case .pinch:
-                camera.zoom(factor: Float(event.scale ))
-                
+                camera.zoom(factor: Float(event.scale))
             default:
                 break
             }
         }
         
-        
-        // Model stays static now
-//        model = mat4f.identity
-        
         var uniforms = Uniforms(
             viewProjectionMatrix: camera.getViewProjectionMatrix(),
-            model: model,
-            time: time.now, jointIndex: jointIndex
+            modelMatrix: model,
+            time: time.now,
+            selectedJointIndex: Int32(currentJointIndex)
         )
+        
         memcpy(uniformsBuffer.contents(), &uniforms, MemoryLayout<Uniforms>.size)
         
         renderEncoder.setRenderPipelineState(pipelineState)
@@ -258,5 +242,4 @@ extension Drawable: MTKViewDelegate {
         commandBuffer.present(drawableTarget)
         commandBuffer.commit()
     }
-    
 }

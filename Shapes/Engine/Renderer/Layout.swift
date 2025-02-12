@@ -19,47 +19,59 @@ enum BufferDataType {
     case int2
     case int3
     case int4
+    case uint16
+    case uint16x2
+    case uint16x4
     case bool
-    
+
     var metalFormat: MTLVertexFormat {
         switch self {
-        case .float:   return .float
-        case .float2:  return .float2
-        case .float3:  return .float3
-        case .float4:  return .float4
-        case .int:     return .int
-        case .int2:    return .int2
-        case .int3:    return .int3
-        case .int4:    return .int4
-        case .bool:    return .uchar
+        case .float:     return .float
+        case .float2:    return .float2
+        case .float3:    return .float3
+        case .float4:    return .float4
+        case .int:       return .int
+        case .int2:      return .int2
+        case .int3:      return .int3
+        case .int4:      return .int4
+        case .uint16:    return .ushort
+        case .uint16x2:  return .ushort2
+        case .uint16x4:  return .ushort4
+        case .bool:      return .uchar
         }
     }
     
     var byteSize: Int {
         switch self {
-        case .float: return 4
-        case .float2: return 8
-        case .float3: return 12
-        case .float4: return 16
-        case .int: return 4
-        case .int2: return 8
-        case .int3: return 12
-        case .int4: return 16
-        case .bool: return 1
+        case .float:     return 4
+        case .float2:    return 8
+        case .float3:    return 12
+        case .float4:    return 16
+        case .int:       return 4
+        case .int2:      return 8
+        case .int3:      return 12
+        case .int4:      return 16
+        case .uint16:    return 2
+        case .uint16x2:  return 4
+        case .uint16x4:  return 8
+        case .bool:      return 1
         }
     }
     
     var alignment: Int {
         switch self {
-        case .float: return 4
-        case .float2: return 8
-        case .float3: return 16
-        case .float4: return 16
-        case .int: return 4
-        case .int2: return 8
-        case .int3: return 16
-        case .int4: return 16
-        case .bool: return 1
+        case .float:     return 4
+        case .float2:    return 8
+        case .float3:    return 16
+        case .float4:    return 16
+        case .int:       return 4
+        case .int2:      return 8
+        case .int3:      return 16
+        case .int4:      return 16
+        case .uint16:    return 2
+        case .uint16x2:  return 4
+        case .uint16x4:  return 8
+        case .bool:      return 1
         }
     }
 }
