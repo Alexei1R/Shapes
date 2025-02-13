@@ -39,12 +39,12 @@ class Drawable: NSObject, ObservableObject {
         super.init()
         setupCamera()
         buildPipeline()
-        model = mat4f.identity.translate(vec3f.up * -60).scale(vec3f.one * 50)
+        model = mat4f.identity.scale(vec3f.one * 0.01).rotate(90, axis: .x).translate(vec3f.up * -1.3)
         loadMesh()
     }
     
     private func loadMesh() {
-        if let modelPath = Bundle.main.path(forResource: "cube", ofType: "usdc") {
+        if let modelPath = Bundle.main.path(forResource: "girl", ofType: "usdc") {
             let modelURL = URL(fileURLWithPath: modelPath)
             let model3D = Model3D()
             
@@ -56,9 +56,6 @@ class Drawable: NSObject, ObservableObject {
                    let meshData = model3D.extractMeshData(from: firstMesh) {
                     
                     
-                    for vertex in meshData.vertices {
-                        print(" \(vertex) ")
-                    }
                     
                     vertexBuffer = MetalBuffer<ModelVertex>(
                         device: device,
@@ -85,7 +82,7 @@ class Drawable: NSObject, ObservableObject {
     
     private func setupCamera() {
         camera = Camera(
-            position: SIMD3(0, 1, -400),
+            position: SIMD3(0, 1, -5),
             target: SIMD3(0, 0, 0),
             up: SIMD3(0, 1, 0),
             fieldOfView: Float.pi / 3,
