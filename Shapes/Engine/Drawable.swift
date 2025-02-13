@@ -5,24 +5,25 @@
 //  Created by rusu alexei on 04.02.2025.
 //
 
-
 import Foundation
 import MetalKit
 
 class Drawable: NSObject, ObservableObject {
     let device: MTLDevice
     var commandQueue: MTLCommandQueue!
-    var pipelineState: MTLRenderPipelineState!
+    var modelPipelineState: MTLRenderPipelineState!
     private var depthStencilState: MTLDepthStencilState!
     private var camera: Camera!
     var model = mat4f.identity
     private var time = Time()
     private var renderPassDescriptor: RenderPassDescriptor?
+    private var circleRenderer: CircleRenderer!
+    private var debugCircles: [Circle] = []
     
     var modelAsset: Model3D?
     @Published var currentJointIndex: Int = 0
     
-    struct Uniforms {
+    struct ModelUniforms {
         var viewProjectionMatrix: mat4f
         var modelMatrix: mat4f
         var time: Float
@@ -31,7 +32,7 @@ class Drawable: NSObject, ObservableObject {
     
     var vertexBuffer: MetalBuffer<ModelVertex>!
     var indexBuffer: MetalBuffer<UInt32>!
-    var uniformsBuffer: MetalBuffer<Uniforms>!
+    var uniformsBuffer: MetalBuffer<ModelUniforms>!
     let materialManager = MaterialManager()
     
     init(device: MTLDevice) {
@@ -39,8 +40,10 @@ class Drawable: NSObject, ObservableObject {
         super.init()
         setupCamera()
         buildPipeline()
+        setupCircleRenderer()
         model = mat4f.identity.scale(vec3f.one * 0.01).rotate(90, axis: .x).translate(vec3f.up * -1.3)
         loadMesh()
+        generateRandomCircles()
     }
     
     private func loadMesh() {
@@ -54,9 +57,6 @@ class Drawable: NSObject, ObservableObject {
                 
                 if let firstMesh = model3D.meshes.first,
                    let meshData = model3D.extractMeshData(from: firstMesh) {
-                    
-                    
-                    
                     vertexBuffer = MetalBuffer<ModelVertex>(
                         device: device,
                         elements: meshData.vertices,
@@ -90,13 +90,6 @@ class Drawable: NSObject, ObservableObject {
             nearPlane: 0.1,
             farPlane: 10000.0
         )
-        let uniforms = Uniforms(
-            viewProjectionMatrix: camera.getViewProjectionMatrix(),
-            modelMatrix: model,
-            time: time.now,
-            selectedJointIndex: Int32(currentJointIndex)
-        )
-        uniformsBuffer = MetalBuffer<Uniforms>(device: device, element: uniforms, usage: .uniforms)
     }
     
     private func setupRenderPass(view: MTKView) -> MTLRenderPassDescriptor? {
@@ -129,7 +122,7 @@ class Drawable: NSObject, ObservableObject {
     private func buildPipeline() {
         commandQueue = device.makeCommandQueue()
         
-        let pipelineDescriptor = MTLRenderPipelineDescriptor()
+        let modelPipelineDescriptor = MTLRenderPipelineDescriptor()
         
         let layout = ShaderLayout([
             ShaderElement(type: .vertex, data: "model_vertex_main"),
@@ -139,8 +132,8 @@ class Drawable: NSObject, ObservableObject {
         do {
             let shaderHandle = try ShaderManager.shared.loadShader(layout: layout)
             if let shader = ShaderManager.shared.getShader(shaderHandle) {
-                pipelineDescriptor.vertexFunction = shader.function(of: .vertex)
-                pipelineDescriptor.fragmentFunction = shader.function(of: .fragment)
+                modelPipelineDescriptor.vertexFunction = shader.function(of: .vertex)
+                modelPipelineDescriptor.fragmentFunction = shader.function(of: .fragment)
             }
         } catch {
             print("Shader loading error: \(error)")
@@ -155,13 +148,13 @@ class Drawable: NSObject, ObservableObject {
             BufferElement(type: .uint16x4, name: "indices"),
             BufferElement(type: .float4, name: "weight")
         ])
-
-        pipelineDescriptor.vertexDescriptor = vertexLayout.metalVertexDescriptor(bufferIndex: 0)
-        pipelineDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
-        pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float
+        
+        modelPipelineDescriptor.vertexDescriptor = vertexLayout.metalVertexDescriptor(bufferIndex: 0)
+        modelPipelineDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
+        modelPipelineDescriptor.depthAttachmentPixelFormat = .depth32Float
         
         do {
-            pipelineState = try device.makeRenderPipelineState(descriptor: pipelineDescriptor)
+            modelPipelineState = try device.makeRenderPipelineState(descriptor: modelPipelineDescriptor)
         } catch {
             print("Failed to create pipeline state: \(error)")
         }
@@ -170,6 +163,48 @@ class Drawable: NSObject, ObservableObject {
         depthStencilDescriptor.depthCompareFunction = .less
         depthStencilDescriptor.isDepthWriteEnabled = true
         depthStencilState = device.makeDepthStencilState(descriptor: depthStencilDescriptor)
+    }
+    
+    private func setupCircleRenderer() {
+        circleRenderer = CircleRenderer(device: device)
+    }
+    
+    func generateRandomCircles() {
+        debugCircles.removeAll()
+        
+        // Generate 10 random circles
+        for _ in 0..<10 {
+            let position = vec3f(
+                Float.random(in: -2...2),  // X
+                Float.random(in: -2...2),  // Y
+                Float.random(in: -1...1)   // Z
+            )
+            
+            let color = vec4f(
+                Float.random(in: 0...1),   // R
+                Float.random(in: 0...1),   // G
+                Float.random(in: 0...1),   // B
+                1.0                        // A
+            )
+            
+            let radius = Float.random(in: 0.05...0.2)
+            
+            let circle = Circle(position: position, color: color, radius: radius)
+            debugCircles.append(circle)
+        }
+        
+        circleRenderer.updateCircles(debugCircles)
+    }
+    
+    func addDebugCircle(at position: vec3f, color: vec4f = vec4f(1, 0, 0, 1), radius: Float = 0.1) {
+        let circle = Circle(position: position, color: color, radius: radius)
+        debugCircles.append(circle)
+        circleRenderer.updateCircles(debugCircles)
+    }
+    
+    func clearDebugCircles() {
+        debugCircles.removeAll()
+        circleRenderer.updateCircles(debugCircles)
     }
     
     func selectNextJoint() {
@@ -182,7 +217,6 @@ class Drawable: NSObject, ObservableObject {
     func selectPreviousJoint() {
         currentJointIndex = max(0, currentJointIndex - 1)
     }
-    
 }
 
 extension Drawable: MTKViewDelegate {
@@ -213,17 +247,23 @@ extension Drawable: MTKViewDelegate {
             }
         }
         
-        var uniforms = Uniforms(
+        // Draw Model
+        var modelUniforms = ModelUniforms(
             viewProjectionMatrix: camera.getViewProjectionMatrix(),
             modelMatrix: model,
             time: time.now,
             selectedJointIndex: Int32(currentJointIndex)
         )
         
-        memcpy(uniformsBuffer.contents(), &uniforms, MemoryLayout<Uniforms>.size)
-        
-        renderEncoder.setRenderPipelineState(pipelineState)
+        renderEncoder.setRenderPipelineState(modelPipelineState)
         renderEncoder.setDepthStencilState(depthStencilState)
+        
+        uniformsBuffer = MetalBuffer<ModelUniforms>(
+            device: device,
+            element: modelUniforms,
+            usage: .uniforms
+        )
+        
         uniformsBuffer.bind(to: renderEncoder, type: .vertex, index: 1)
         vertexBuffer.bind(to: renderEncoder, type: .vertex, index: 0)
         
@@ -234,6 +274,9 @@ extension Drawable: MTKViewDelegate {
             indexBuffer: indexBuffer.raw()!,
             indexBufferOffset: 0
         )
+        
+        // Draw Circles
+        circleRenderer.render(encoder: renderEncoder, viewProjectionMatrix: camera.getViewProjectionMatrix())
         
         renderEncoder.endEncoding()
         commandBuffer.present(drawableTarget)
