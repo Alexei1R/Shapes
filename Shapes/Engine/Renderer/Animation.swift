@@ -15,7 +15,6 @@ enum AnimationState {
 }
 
 class AnimationManager {
-    
     private let model: Model3D
     private(set) var state: AnimationState = .stopped
     private var currentAnimationIndex: Int?
@@ -56,31 +55,103 @@ class AnimationManager {
         print("Stopped animation.")
     }
     
-    func update(deltaTime: TimeInterval) -> [mat4f]{
-        guard state == .playing, let animationIndex = currentAnimationIndex else {
-            fatalError("Incorect animation index")
+    private func quaternionToMatrix(_ q: simd_quatf) -> mat4f {
+        let w = q.vector.w
+        let x = q.vector.x
+        let y = q.vector.y
+        let z = q.vector.z
+        
+        return mat4f(
+            SIMD4<Float>(1 - 2*y*y - 2*z*z, 2*x*y + 2*w*z, 2*x*z - 2*w*y, 0),
+            SIMD4<Float>(2*x*y - 2*w*z, 1 - 2*x*x - 2*z*z, 2*y*z + 2*w*x, 0),
+            SIMD4<Float>(2*x*z + 2*w*y, 2*y*z - 2*w*x, 1 - 2*x*x - 2*y*y, 0),
+            SIMD4<Float>(0, 0, 0, 1)
+        )
+    }
+    
+    func update(deltaTime: TimeInterval) -> [mat4f] {
+        guard state == .playing,
+              let animationIndex = currentAnimationIndex,
+              let animation = model.animations[safe: animationIndex] else {
+            return model.joints.map { $0.bindTransform }
         }
         
-        let animation = model.animations[animationIndex]
         currentTime += deltaTime
-        
-        // Loop the animation by wrapping the current time around the duration.
         if currentTime > animation.duration {
             currentTime = currentTime.truncatingRemainder(dividingBy: animation.duration)
         }
         
-        // Ensure there is at least one keyframe.
-        let totalFrames = animation.translations.count
-        guard totalFrames > 0 else {             fatalError("Incorect animation index")
+        let frameCount = animation.translations.count / animation.jointPaths.count
+        let frameTime = animation.duration / Double(frameCount - 1)
+        let currentFrame = Int(currentTime / frameTime)
+        let nextFrame = (currentFrame + 1) % frameCount
+        let frameDelta = Float((currentTime.truncatingRemainder(dividingBy: frameTime)) / frameTime)
+        
+        var jointMatrices = [mat4f](repeating: .identity, count: model.joints.count)
+        var pathToIndex: [String: Int] = [:]
+        
+        // Create path to joint index mapping
+        for (index, path) in animation.jointPaths.enumerated() {
+            if let jointIndex = model.joints.firstIndex(where: { $0.path == path }) {
+                pathToIndex[path] = jointIndex
+            }
         }
         
+        // Calculate interpolated transforms for each joint
+        for (pathIndex, path) in animation.jointPaths.enumerated() {
+            guard let jointIndex = pathToIndex[path] else { continue }
+            let joint = model.joints[jointIndex]
+            
+            // Calculate array indices for current and next frame
+            let currentIndex = pathIndex + currentFrame * animation.jointPaths.count
+            let nextIndex = pathIndex + nextFrame * animation.jointPaths.count
+            
+            // Get translation, rotation, and scale for current and next frame
+            let t0 = animation.translations[currentIndex]
+            let t1 = animation.translations[nextIndex]
+            let r0 = animation.rotations[currentIndex]
+            let r1 = animation.rotations[nextIndex]
+            let s0 = animation.scales[currentIndex]
+            let s1 = animation.scales[nextIndex]
+            
+            // Interpolate translation and scale
+            let translation = mix(t0, t1, t: frameDelta)
+            let scale = mix(s0, s1, t: frameDelta)
+            
+            // Interpolate rotation using quaternion slerp
+            let rotation = simd_slerp(r0, r1, frameDelta)
+            
+            // Create transform matrix
+            let scaleMatrix = mat4f.identity.scale(scale)
+            let rotationMatrix = quaternionToMatrix(rotation)
+            let translationMatrix = mat4f.identity.translate(translation)
+            
+            let localTransform = translationMatrix * rotationMatrix * scaleMatrix
+            
+            // Apply parent transform if exists
+            if let parentIndex = joint.parentIndex {
+                jointMatrices[jointIndex] = jointMatrices[parentIndex] * localTransform
+            } else {
+                jointMatrices[jointIndex] = localTransform
+            }
+        }
         
-        
-        //interpolate beetween joints transforms ,and make shure that the animations is played corectrly
-        
-        
-        
-        // TODO: Remove this line when finish the function
-        return [mat4f.identity]
+        // Calculate final matrices including bind pose
+        return jointMatrices.enumerated().map { index, matrix in
+            let joint = model.joints[index]
+            return matrix * joint.bindTransform.inverse()
+        }
+    }
+}
+
+// Helper function to mix vectors
+private func mix(_ v0: SIMD3<Float>, _ v1: SIMD3<Float>, t: Float) -> SIMD3<Float> {
+    return v0 * (1 - t) + v1 * t
+}
+
+// Safe array access
+private extension Array {
+    subscript(safe index: Index) -> Element? {
+        return indices.contains(index) ? self[index] : nil
     }
 }

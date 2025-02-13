@@ -23,6 +23,9 @@ class Drawable: NSObject, ObservableObject {
     var modelAsset: Model3D?
     @Published var currentJointIndex: Int = 0
     
+    private var animationManager: AnimationManager?
+    private var jointMatricesBuffer: MetalBuffer<matrix_float4x4>?
+    
     struct ModelUniforms {
         var viewProjectionMatrix: mat4f
         var modelMatrix: mat4f
@@ -41,10 +44,41 @@ class Drawable: NSObject, ObservableObject {
         setupCamera()
         buildPipeline()
         setupCircleRenderer()
-        model = mat4f.identity.scale(vec3f.one * 0.01).rotateDegrees(90 , axis: .x).translate(vec3f.up * -1.3)
+        model = mat4f.identity.scale(vec3f.one * 0.01).translate(vec3f.up * -1.3)
         loadMesh()
+        
+        // Initialize animation system after loading the mesh
+        if let model3D = modelAsset {
+            animationManager = AnimationManager(model: model3D)
+            jointMatricesBuffer = MetalBuffer<matrix_float4x4>(
+                device: device,
+                count: model3D.joints.count,
+                usage: .storageShared
+            )
+        }
+        
         generateRandomCircles()
     }
+    
+    // MARK: - Animation Control Methods
+    
+    func playAnimation(index: Int) {
+        animationManager?.play(animationIndex: index)
+    }
+    
+    func pauseAnimation() {
+        animationManager?.pause()
+    }
+    
+    func resumeAnimation() {
+        animationManager?.resume()
+    }
+    
+    func stopAnimation() {
+        animationManager?.stop()
+    }
+    
+    // MARK: - Setup Methods
     
     private func loadMesh() {
         if let modelPath = Bundle.main.path(forResource: "girl", ofType: "usdc") {
@@ -91,9 +125,6 @@ class Drawable: NSObject, ObservableObject {
             farPlane: 10000.0
         )
     }
-    
-    
-    
     
     private func setupRenderPass(view: MTKView) -> MTLRenderPassDescriptor? {
         guard let currentDrawable = view.currentDrawable else { return nil }
@@ -168,6 +199,8 @@ class Drawable: NSObject, ObservableObject {
         depthStencilState = device.makeDepthStencilState(descriptor: depthStencilDescriptor)
     }
     
+    // MARK: - Circle Rendering Methods
+    
     private func setupCircleRenderer() {
         circleRenderer = CircleRenderer(device: device)
     }
@@ -210,6 +243,8 @@ class Drawable: NSObject, ObservableObject {
         circleRenderer.updateCircles(debugCircles)
     }
     
+    // MARK: - Joint Selection Methods
+    
     func selectNextJoint() {
         if let model = modelAsset {
             let maxJoint = model.joints.isEmpty ? 0 : model.joints.count - 1
@@ -222,22 +257,20 @@ class Drawable: NSObject, ObservableObject {
     }
     
     func addTenRandomCircles() {
-        // Clear previous circles
         clearDebugCircles()
         
-        // Generate and add 10 new random circles
         for _ in 0..<10 {
             let position = vec3f(
-                Float.random(in: -2...2),  // X
-                Float.random(in: -2...2),  // Y
-                Float.random(in: -1...1)   // Z
+                Float.random(in: -2...2),
+                Float.random(in: -2...2),
+                Float.random(in: -1...1)
             )
             
             let color = vec4f(
-                Float.random(in: 0...1),   // R
-                Float.random(in: 0...1),   // G
-                Float.random(in: 0...1),   // B
-                1.0                        // A
+                Float.random(in: 0...1),
+                Float.random(in: 0...1),
+                Float.random(in: 0...1),
+                1.0
             )
             
             let radius = Float.random(in: 0.05...0.2)
@@ -246,10 +279,11 @@ class Drawable: NSObject, ObservableObject {
             debugCircles.append(circle)
         }
         
-        // Update the circle renderer with the new circles
         circleRenderer.updateCircles(debugCircles)
     }
 }
+
+// MARK: - MTKViewDelegate Implementation
 
 extension Drawable: MTKViewDelegate {
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
@@ -265,6 +299,7 @@ extension Drawable: MTKViewDelegate {
         
         time.update()
         
+        // Handle user input events
         if EventManager.shared.isActive, let event = EventManager.shared.currentEvent {
             switch event.type {
             case .drag:
@@ -277,6 +312,12 @@ extension Drawable: MTKViewDelegate {
             default:
                 break
             }
+        }
+        
+        // Update animation
+        if let animationManager = animationManager {
+            let jointMatrices = animationManager.update(deltaTime: time.deltaTime)
+            jointMatricesBuffer?.update(with: jointMatrices)
         }
         
         // Draw Model
@@ -299,6 +340,11 @@ extension Drawable: MTKViewDelegate {
         uniformsBuffer.bind(to: renderEncoder, type: .vertex, index: 1)
         vertexBuffer.bind(to: renderEncoder, type: .vertex, index: 0)
         
+        // Bind joint matrices if available
+        if let jointMatricesBuffer = jointMatricesBuffer {
+            jointMatricesBuffer.bind(to: renderEncoder, type: .vertex, index: 2)
+        }
+        
         renderEncoder.drawIndexedPrimitives(
             type: .triangle,
             indexCount: indexBuffer.count,
@@ -307,7 +353,7 @@ extension Drawable: MTKViewDelegate {
             indexBufferOffset: 0
         )
         
-        // Draw Circles
+        // Draw Debug Circles
         circleRenderer.render(encoder: renderEncoder, viewProjectionMatrix: camera.getViewProjectionMatrix())
         
         renderEncoder.endEncoding()

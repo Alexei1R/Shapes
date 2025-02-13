@@ -11,8 +11,6 @@ struct ModelVertexIn {
     float4 jointWeights [[attribute(6)]];
 };
 
-
-
 struct VertexOut {
     float4 position [[position]];
     float3 normal;
@@ -29,25 +27,41 @@ struct Uniforms {
     int jointIndex;
 };
 
+constant int MAX_JOINTS = 64;
+
 vertex VertexOut model_vertex_main(
     ModelVertexIn in [[stage_in]],
-    constant Uniforms &uniforms [[buffer(1)]]
+    constant Uniforms &uniforms [[buffer(1)]],
+    constant float4x4 *jointMatrices [[buffer(2)]]
 ) {
     VertexOut out;
     
-    float4 worldPosition = uniforms.model * float4(in.position, 1.0);
+    // Calculate skinning matrix
+    float4x4 skinMatrix = float4x4(0.0);
+    for(int i = 0; i < 4; i++) {
+        int jointIndex = in.jointIndices[i];
+        float weight = in.jointWeights[i];
+        skinMatrix += jointMatrices[jointIndex] * weight;
+    }
+    
+    // Apply skinning
+    float4 skinnedPosition = skinMatrix * float4(in.position, 1.0);
+    float4 worldPosition = uniforms.model * skinnedPosition;
     out.position = uniforms.viewProjectionMatrix * worldPosition;
     out.worldPos = worldPosition.xyz;
     
-    float3x3 normalMatrix = float3x3(uniforms.model[0].xyz,
-                                   uniforms.model[1].xyz,
-                                   uniforms.model[2].xyz);
+    // Transform normal by skinning matrix
+    float3x3 normalMatrix = float3x3(
+        normalize(skinMatrix[0].xyz),
+        normalize(skinMatrix[1].xyz),
+        normalize(skinMatrix[2].xyz)
+    );
     out.normal = normalize(normalMatrix * in.normal);
     out.texCoords = in.texCoords;
     
     float4 viewPos = uniforms.viewProjectionMatrix * worldPosition;
     out.viewPos = viewPos.xyz / viewPos.w;
-   
+    
     // Get the weight for the selected joint
     float weight = 0.0;
     for (int i = 0; i < 4; i++) {
@@ -62,7 +76,7 @@ vertex VertexOut model_vertex_main(
 }
 
 fragment float4 model_fragment_main(VertexOut in [[stage_in]]) {
-    float3 lightPos = float3(0.0, 0.0, 500.0);
+    float3 lightPos = float3(0.0, 5.0, 5.0);
     float3 lightColor = float3(1.0, 1.0, 1.0);
     float3 baseColor = float3(0.7, 0.7, 0.7);
     

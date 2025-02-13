@@ -19,6 +19,30 @@ struct ContentView: View {
             
             VStack {
                 Spacer()
+                
+                HStack {
+                    Button(action: {
+                        drawable.playAnimation(index: 0 )
+                    }) {
+                        Text("Play")
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    }
+                    
+                    Button(action: {
+                        drawable.stopAnimation()
+                    }) {
+                        Text("Pause")
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    }
+
+                    
+                }
                 HStack {
                     Button(action: {
                         drawable.selectPreviousJoint()
@@ -46,15 +70,6 @@ struct ContentView: View {
                             .cornerRadius(10)
                     }
                     
-                    Button(action: {
-                        drawable.addTenRandomCircles()
-                    }) {
-                        Text(" Random ")
-                            .padding()
-                            .background(Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                    }
                 }
                 .padding()
             }
