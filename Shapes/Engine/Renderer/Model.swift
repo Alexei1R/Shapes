@@ -48,6 +48,8 @@ public class Model3D {
     public let targetUp: SIMD3<Float>
     private var conversionMatrix: simd_float4x4 = matrix_identity_float4x4
     private var conversionMatrixInverse: simd_float4x4 = matrix_identity_float4x4
+    private var overallConversion: simd_float4x4 = matrix_identity_float4x4
+    private var overallConversionInverse: simd_float4x4 = matrix_identity_float4x4
     
     private(set) var asset: MDLAsset?
     private(set) var meshes: [MDLMesh] = []
@@ -122,7 +124,10 @@ public class Model3D {
             sourceUp = SIMD3<Float>(0, 0, 1)
         }
         conversionMatrix = rotationMatrix(from: sourceUp, to: targetUp)
-        conversionMatrixInverse = conversionMatrix.inverse()
+        conversionMatrixInverse = conversionMatrix.inverse
+        let flipZ = simd_float4x4(diagonal: SIMD4<Float>(1, 1, -1, 1))
+        overallConversion = flipZ * conversionMatrix
+        overallConversionInverse = conversionMatrixInverse * flipZ
         
         try loadMeshes()
         loadSkeleton()
@@ -179,8 +184,8 @@ public class Model3D {
                 let parentIndex = pathToIndex[parentPath]
                 let originalBind = bindTransforms.float4x4Array[i]
                 let originalRest = restTransforms.float4x4Array[i]
-                let bind = conversionMatrix * originalBind * conversionMatrixInverse
-                let rest = conversionMatrix * originalRest * conversionMatrixInverse
+                let bind = overallConversion * originalBind * overallConversionInverse
+                let rest = overallConversion * originalRest * overallConversionInverse
                 let joint = ModelJoint(id: i,
                                        name: (p as NSString).lastPathComponent,
                                        path: p as String,
@@ -201,16 +206,27 @@ public class Model3D {
                 let scales = packed.scales.float3Array
                 if packed.jointPaths.isEmpty || translations.isEmpty || rotations.isEmpty || scales.isEmpty { continue }
                 let name = (packed as MDLNamed).name.isEmpty ? "Animation_\(animations.count + 1)" : (packed as MDLNamed).name
+                let transformedTranslations = translations.map {
+                    let t4 = overallConversion * SIMD4<Float>($0, 0)
+                    return SIMD3<Float>(t4.x, t4.y, t4.z)
+                }
+                let transformedRotations = rotations.map { transformQuaternion($0) }
                 let anim = ModelAnimation(name: name,
                                           jointPaths: packed.jointPaths,
-                                          translations: translations,
-                                          rotations: rotations,
+                                          translations: transformedTranslations,
+                                          rotations: transformedRotations,
                                           scales: scales,
                                           duration: asset.endTime,
                                           frameInterval: asset.frameInterval)
                 animations.append(anim)
             }
         }
+    }
+    
+    private func transformQuaternion(_ q: simd_quatf) -> simd_quatf {
+        let m = simd_float4x4(q)
+        let mTransformed = overallConversion * m * overallConversionInverse
+        return simd_quatf(mTransformed)
     }
     
     public func printAllComponents() {
@@ -224,16 +240,6 @@ public class Model3D {
             let n = (m as MDLNamed).name.isEmpty ? "Mesh_\(i+1)" : (m as MDLNamed).name
             print("\(i+1). \(n) - Vertices: \(m.vertexCount)")
         }
-//        if !joints.isEmpty {
-//            print("Skeleton joints: \(joints.count)")
-//            for j in joints {
-//                print("id: \(j.id), name: \(j.name), path: \(j.path), parent: \(j.parentIndex.map(String.init) ?? "nil")")
-//            }
-//        } else {
-//            print("No skeleton found")
-//        }
-        
-        
         print("Animations: \(animations.count)")
         for (i, a) in animations.enumerated() {
             print("\(i+1). \(a.name) - Duration: \(a.duration)s, Frame Interval: \(a.frameInterval)s")
@@ -264,13 +270,13 @@ public class Model3D {
                                 jointWeights: SIMD4<Float>(1, 0, 0, 0))
             if let (off, _) = attrMap[MDLVertexAttributePosition] {
                 var pos = base.advanced(by: off).assumingMemoryBound(to: SIMD3<Float>.self).pointee
-                let pos4 = conversionMatrix * SIMD4<Float>(pos, 1)
+                let pos4 = overallConversion * SIMD4<Float>(pos, 1)
                 pos = SIMD3<Float>(pos4.x, pos4.y, pos4.z)
                 v.position = pos
             }
             if let (off, _) = attrMap[MDLVertexAttributeNormal] {
                 var norm = base.advanced(by: off).assumingMemoryBound(to: SIMD3<Float>.self).pointee
-                let norm4 = conversionMatrix * SIMD4<Float>(norm, 0)
+                let norm4 = overallConversion * SIMD4<Float>(norm, 0)
                 norm = normalize(SIMD3<Float>(norm4.x, norm4.y, norm4.z))
                 v.normal = norm
             }
@@ -279,13 +285,13 @@ public class Model3D {
             }
             if let (off, _) = attrMap[MDLVertexAttributeTangent] {
                 var tan = base.advanced(by: off).assumingMemoryBound(to: SIMD3<Float>.self).pointee
-                let tan4 = conversionMatrix * SIMD4<Float>(tan, 0)
+                let tan4 = overallConversion * SIMD4<Float>(tan, 0)
                 tan = normalize(SIMD3<Float>(tan4.x, tan4.y, tan4.z))
                 v.tangent = tan
             }
             if let (off, _) = attrMap[MDLVertexAttributeBitangent] {
                 var bitan = base.advanced(by: off).assumingMemoryBound(to: SIMD3<Float>.self).pointee
-                let bitan4 = conversionMatrix * SIMD4<Float>(bitan, 0)
+                let bitan4 = overallConversion * SIMD4<Float>(bitan, 0)
                 bitan = normalize(SIMD3<Float>(bitan4.x, bitan4.y, bitan4.z))
                 v.bitangent = bitan
             }
@@ -342,5 +348,3 @@ extension mat4f {
         )
     }
 }
-
-

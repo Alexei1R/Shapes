@@ -39,9 +39,9 @@ files=(
     "Engine/Drawable.swift"
     "Engine/Renderer/Model.swift"
     "Engine/Renderer/Animation.swift"
-    "Engine/Utils/Time.swift"
+    # "Engine/Utils/Time.swift"
     "Shaders/ModelShaders.metal"
-    "Shaders/Circle.metal"
+    # "Shaders/Circle.metal"
     # "ContentView.swift"
     # "ScanView.swift"
     
