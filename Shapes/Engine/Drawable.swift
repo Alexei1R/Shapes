@@ -41,7 +41,7 @@ class Drawable: NSObject, ObservableObject {
         setupCamera()
         buildPipeline()
         setupCircleRenderer()
-        model = mat4f.identity.scale(vec3f.one * 0.01).rotate(90, axis: .x).translate(vec3f.up * -1.3)
+        model = mat4f.identity.scale(vec3f.one * 0.01).rotateDegrees(90 , axis: .x).translate(vec3f.up * -1.3)
         loadMesh()
         generateRandomCircles()
     }
@@ -91,6 +91,9 @@ class Drawable: NSObject, ObservableObject {
             farPlane: 10000.0
         )
     }
+    
+    
+    
     
     private func setupRenderPass(view: MTKView) -> MTLRenderPassDescriptor? {
         guard let currentDrawable = view.currentDrawable else { return nil }
@@ -216,6 +219,35 @@ class Drawable: NSObject, ObservableObject {
     
     func selectPreviousJoint() {
         currentJointIndex = max(0, currentJointIndex - 1)
+    }
+    
+    func addTenRandomCircles() {
+        // Clear previous circles
+        clearDebugCircles()
+        
+        // Generate and add 10 new random circles
+        for _ in 0..<10 {
+            let position = vec3f(
+                Float.random(in: -2...2),  // X
+                Float.random(in: -2...2),  // Y
+                Float.random(in: -1...1)   // Z
+            )
+            
+            let color = vec4f(
+                Float.random(in: 0...1),   // R
+                Float.random(in: 0...1),   // G
+                Float.random(in: 0...1),   // B
+                1.0                        // A
+            )
+            
+            let radius = Float.random(in: 0.05...0.2)
+            
+            let circle = Circle(position: position, color: color, radius: radius)
+            debugCircles.append(circle)
+        }
+        
+        // Update the circle renderer with the new circles
+        circleRenderer.updateCircles(debugCircles)
     }
 }
 

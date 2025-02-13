@@ -45,6 +45,16 @@ struct ContentView: View {
                             .foregroundColor(.white)
                             .cornerRadius(10)
                     }
+                    
+                    Button(action: {
+                        drawable.addTenRandomCircles()
+                    }) {
+                        Text(" Random ")
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    }
                 }
                 .padding()
             }

@@ -78,9 +78,9 @@ extension mat4f {
     
     // MARK: - Transformations
     @inlinable
-    public func rotate(_ angle: Float, axis: Axis) -> mat4f {
-        let cosA = cos(angle)
-        let sinA = sin(angle)
+    public func rotate(_ rad : Float, axis: Axis) -> mat4f {
+        let cosA = cos(rad)
+        let sinA = sin(rad)
         
         var result = self
         switch axis {
@@ -113,11 +113,20 @@ extension mat4f {
     }
     
     @inlinable
-    public func rotate(_ angle: Float, around center: vec3f, axis: Axis) -> mat4f {
+    public func rotate(_ rad : Float, around center: vec3f, axis: Axis) -> mat4f {
         translate(center)
-            .rotate(angle, axis: axis)
+            .rotate(rad, axis: axis)
             .translate(-center)
     }
+    
+    
+    @inlinable
+    public func rotateDegrees(_ angle: Float, axis: Axis) -> mat4f {
+        rotate( angle * .pi / 180, axis: axis)
+    }
+    
+    
+    
     
     @inlinable
     public func scale(_ scale: vec3f) -> mat4f {

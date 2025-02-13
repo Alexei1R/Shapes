@@ -4,8 +4,6 @@
 //
 //  Created by rusu alexei on 13.02.2025.
 //
-
-
 import Foundation
 import MetalKit
 
@@ -25,7 +23,7 @@ class CircleRenderer {
     private let device: MTLDevice
     private var pipelineState: MTLRenderPipelineState!
     private var vertexBuffer: MTLBuffer!
-    private var circleBuffer: MetalBuffer<Circle>!
+    private var circleBuffer: MetalBuffer<Circle>?
     
     struct Uniforms {
         var viewProjectionMatrix: mat4f
@@ -77,15 +75,20 @@ class CircleRenderer {
     }
     
     func updateCircles(_ circles: [Circle]) {
-        circleBuffer = MetalBuffer<Circle>(
-            device: device,
-            elements: circles,
-            usage: .storageShared
-        )
+        // Only create a buffer if we have circles to render
+        if circles.isEmpty {
+            circleBuffer = nil
+        } else {
+            circleBuffer = MetalBuffer<Circle>(
+                device: device,
+                elements: circles,
+                usage: .storageShared
+            )
+        }
     }
     
     func render(encoder: MTLRenderCommandEncoder, viewProjectionMatrix: mat4f) {
-        guard let circleBuffer = circleBuffer else { return }
+        guard let circleBuffer = circleBuffer, circleBuffer.count > 0 else { return }
         
         let uniforms = Uniforms(viewProjectionMatrix: viewProjectionMatrix)
         uniformsBuffer = MetalBuffer<Uniforms>(
