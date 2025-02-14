@@ -83,7 +83,7 @@ struct ModelView: View {
                         .padding(.bottom, 10)
 
                         modeButton(
-                            iconName: "person.fill.and.arrow.left.and.arrow.right.outward",
+                            iconName: "scribble.variable",
                             color: .cyan) {
                                 showAnimationSelector = true
                             }

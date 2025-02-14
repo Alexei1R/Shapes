@@ -89,7 +89,7 @@ class Drawable: NSObject, ObservableObject {
     }
     
     private func loadMesh() {
-        if let modelPath = Bundle.main.path(forResource: "robot", ofType: "usdc") {
+        if let modelPath = Bundle.main.path(forResource: "girl", ofType: "usdc") {
             let modelURL = URL(fileURLWithPath: modelPath)
             let model3D = Model3D()
             do {

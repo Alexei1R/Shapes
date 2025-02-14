@@ -8,21 +8,21 @@
 import SwiftUI
 
 struct CameraView: View {
-
+    
     @Binding var selectedTab: TabItem
     @StateObject private var viewModel: CameraViewModel = CameraViewModel(animationRecorder: AppEnv.shared.animationRecorder)
     @State private var showPopUp: Bool = false
-
+    
     var body: some View {
         ZStack {
             ARViewContainer(handleFrame: { frame in
                 viewModel.handleFrame(capturedFrame: frame)
             })
-                .ignoresSafeArea()
+            .ignoresSafeArea()
             if showPopUp {
                 createEndScanPopUp()
             }
-
+            
         }
         .overlay(alignment: .topTrailing) {
             modeButton(
@@ -56,7 +56,7 @@ private extension CameraView {
                 .cornerRadius(12)
         }
     }
-
+    
     func createRecordButton() -> some View {
         VStack {
             Image(systemName: viewModel.isRecording ? "square.fill" : "circle.fill")
@@ -89,7 +89,7 @@ private extension CameraView {
         .padding(.bottom, 45)
         .ignoresSafeArea()
     }
-
+    
     func createEndScanPopUp() -> some View {
         ZStack {
             VStack(spacing: 16) {
@@ -97,45 +97,56 @@ private extension CameraView {
                     .font(.title2)
                     .foregroundColor(.white)
                     .padding(.top, 16)
-
-                VStack(spacing: 16) {
-                    Button {
-                        viewModel.saveRecording()
-                        showPopUp = false
-                    } label: {
-                        HStack {
-                            TextField(text: $viewModel.recordingName, prompt: Text("")) {}
-                                .foregroundColor(.white)
-                                .frame(height: 50)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(lineWidth: 3)
-                                        .foregroundStyle(.white)
-                                )
-                            Image(systemName: "square.and.arrow.down.fill")
-                        }
-                        .font(.system(size: 20))
-                        .foregroundColor(.yellow)
-                        .background(Color.black.opacity(0.6))
-                        .cornerRadius(12)
+                
+                HStack(spacing: 16) {
+                    VStack {
+                        TextField(text: $viewModel.recordingName, prompt: Text(" Default")) {}
+                            .multilineTextAlignment(.center)
+                            .foregroundColor(.white)
+                            .frame(height: 50)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(lineWidth: 3)
+                                    .foregroundStyle(.white)
+                            )
+                            .onTapGesture {
+                                viewModel.recordingName = ""
+                            }
                         
+                        Image(systemName: "square.and.arrow.down.fill")
+                            .font(.system(size: 30))
+                            .foregroundColor(.yellow)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.black.opacity(0.6))
+                            .cornerRadius(12)
+                            .onTapGesture {
+                                viewModel.saveRecording()
+                                showPopUp = false
+                            }
                     }
                 }
                 .padding(.horizontal, 16)
-
+                
                 Spacer()
             }
-            .overlay(alignment: .topTrailing, content: {
-                Image(systemName: "xmark")
-                    .onTapGesture {
-                        showPopUp = false
-                    }
-            })
-            .frame(width: 300, height: 200)
-            .background(Color.black.opacity(0.8))
-            .cornerRadius(16)
-            .shadow(radius: 10)
         }
+        
+        .overlay(alignment: .topTrailing, content: {
+            Button(action: {
+                showPopUp = false
+            }) {
+                Image(systemName: "xmark")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 20, height: 20)
+                    .padding()
+//                    .background(Color.green)
+            }
+        })
+        .frame(width: 300, height: 200)
+        .background(Color.black.opacity(0.8))
+        .cornerRadius(16)
+        .shadow(radius: 10)
     }
-
 }

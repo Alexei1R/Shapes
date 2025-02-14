@@ -11,7 +11,7 @@ import MetalKit
 
 final class CameraViewModel: ObservableObject {
     @Published var isRecording: Bool = false
-    @Published var recordingName: String = ""
+    @Published var recordingName: String = "default"
 //    @Published var capturedAnimation: CapturedAnimation = CapturedAnimation(name: "", capturedFrames: [], duration: 0)
     private var startRecordingTime: TimeInterval? = nil
     private var frameRate: TimeInterval? = nil
