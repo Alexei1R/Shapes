@@ -7,12 +7,11 @@
 
 import Foundation
 import MetalKit
-import CoreFoundation
 
 class Time {
     let maxDelta: Double = 0.1
-    private var previousTime: CFTimeInterval
-    private var startTime: CFTimeInterval
+    private var previousTime: TimeInterval
+    private var startTime: TimeInterval
     private(set) var deltaTime: Double = 0.0
     private(set) var totalTime: Double = 0.0
     var deltaTimeFloat: Float { Float(deltaTime) }

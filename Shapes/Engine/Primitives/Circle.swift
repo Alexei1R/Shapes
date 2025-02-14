@@ -7,7 +7,7 @@
 import Foundation
 import MetalKit
 
-struct Circle {
+struct DebugCircle {
     var position: vec3f
     var color: vec4f
     var radius: Float
@@ -23,7 +23,7 @@ class CircleRenderer {
     private let device: MTLDevice
     private var pipelineState: MTLRenderPipelineState!
     private var vertexBuffer: MTLBuffer!
-    private var circleBuffer: MetalBuffer<Circle>?
+    private var circleBuffer: MetalBuffer<DebugCircle>?
     
     struct Uniforms {
         var viewProjectionMatrix: mat4f
@@ -74,12 +74,12 @@ class CircleRenderer {
         )
     }
     
-    func updateCircles(_ circles: [Circle]) {
+    func updateCircles(_ circles: [DebugCircle]) {
         // Only create a buffer if we have circles to render
         if circles.isEmpty {
             circleBuffer = nil
         } else {
-            circleBuffer = MetalBuffer<Circle>(
+            circleBuffer = MetalBuffer<DebugCircle>(
                 device: device,
                 elements: circles,
                 usage: .storageShared
