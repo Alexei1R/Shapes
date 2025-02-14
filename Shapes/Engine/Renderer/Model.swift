@@ -178,6 +178,7 @@ public class Model3D {
             for (i, p) in paths.enumerated() {
                 pathToIndex[p as String] = i
             }
+            print(paths.count)
             for (i, p) in paths.enumerated() {
                 let comps = (p as String).components(separatedBy: "/")
                 let parentPath = comps.dropLast().joined(separator: "/")

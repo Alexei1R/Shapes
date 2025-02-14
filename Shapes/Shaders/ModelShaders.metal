@@ -27,7 +27,7 @@ struct Uniforms {
     int jointIndex;
 };
 
-constant int MAX_JOINTS = 64;
+constant int MAX_JOINTS = 91;
 
 vertex VertexOut model_vertex_main(
     ModelVertexIn in [[stage_in]],

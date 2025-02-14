@@ -49,7 +49,7 @@ class Drawable: NSObject, ObservableObject {
         setupCamera()
         buildPipeline()
         model = mat4f.identity.scale(vec3f.one * 0.01)
-//            .translate(vec3f.up * -1.3)
+            .translate(vec3f.up * 1)
             .rotateDegrees(90, axis: .x)
             .rotateDegrees(180, axis: .y)
         
@@ -89,7 +89,7 @@ class Drawable: NSObject, ObservableObject {
     }
     
     private func loadMesh() {
-        if let modelPath = Bundle.main.path(forResource: "girl", ofType: "usdc") {
+        if let modelPath = Bundle.main.path(forResource: "robot", ofType: "usdc") {
             let modelURL = URL(fileURLWithPath: modelPath)
             let model3D = Model3D()
             do {
