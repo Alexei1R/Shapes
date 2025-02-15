@@ -37,15 +37,16 @@ temp_file=$(mktemp)
 # Array of target files
 files=(
     "Engine/Drawable.swift"
-    # "Engine/Renderer/Model.swift"
-    "Engine/Renderer/Animation.swift"
+    "Engine/Renderer/Model.swift"
+    # "Engine/Renderer/Animation.swift"
     "Engine/Renderer/CustomAnimation.swift"
 
     "Views/ARUIView.swift"
     "Service/AnimationRecorder.swift"
     # "Engine/Utils/Time.swift"
-    # "Shaders/ModelShaders.metal"
-    # "Shaders/Circle.metal"
+    "Shaders/ModelShaders.metal"
+    "Shaders/Circle.metal"
+    "Engine/Primitives/Circle.swift"
     # "ContentView.swift"
     # "ScanView.swift"
     #

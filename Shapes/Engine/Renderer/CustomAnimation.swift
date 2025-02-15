@@ -1,138 +1,179 @@
-//
-//  CustomAnimation.swift
-//  Shapes
-//
-//  Created by rusu alexei on 15.02.2025.
-//
 import Foundation
 import simd
 
+
+enum AnimationState {
+    case stopped
+    case playing
+    case paused
+}
+
+
 class CustomAnimation {
-    var recordedAnimation: CapturedAnimation?
+    // Animation state
+    private var recordedAnimation: CapturedAnimation?
     private var currentTime: TimeInterval = 0.0
     private var lastFrameTime: TimeInterval = 0.0
-    private var frameRate: TimeInterval = 1.0/30.0 // 30 fps
+    private var state: AnimationState = .stopped
+    private var isLooping: Bool = true  // Default to looping
+    
+    // Event system properties
+    private var eventCallbacks: [AnimationEventCallback] = []
+    
+    // Animation control properties
+    private var playbackSpeed: Float = 1.0
+    private var isReversed: Bool = false
+    
+    // Animation event type
+    enum AnimationEvent {
+        case started
+        case completed
+        case looped
+        case stopped
+        case paused
+        case resumed
+    }
+    
+    // Callback type for animation events
+    typealias AnimationEventCallback = (AnimationEvent) -> Void
     
     func play(animation: CapturedAnimation, startTime: TimeInterval = 0.0) {
         self.recordedAnimation = animation
         self.currentTime = startTime
         self.lastFrameTime = 0.0
-        print("Custom animation started: \(animation.name)")
+        self.state = .playing
+        notifyListeners(.started)
+        print("Playing animation: \(animation.name)")
+    }
+    
+    func pause() {
+        guard state == .playing else { return }
+        state = .paused
+        notifyListeners(.paused)
+        print("Animation paused")
+    }
+    
+    func resume() {
+        guard state == .paused else { return }
+        state = .playing
+        notifyListeners(.resumed)
+        print("Animation resumed")
     }
     
     func stop() {
         recordedAnimation = nil
         currentTime = 0.0
         lastFrameTime = 0.0
-        print("Custom animation stopped.")
+        state = .stopped
+        notifyListeners(.stopped)
+        print("Animation stopped")
+    }
+    
+    func setLooping(_ shouldLoop: Bool) {
+        isLooping = shouldLoop
     }
     
     func update(deltaTime: TimeInterval) -> [mat4f] {
         guard let animation = recordedAnimation,
-              !animation.capturedFrames.isEmpty else {
+              !animation.capturedFrames.isEmpty,
+              state == .playing else {
             return []
         }
         
-        currentTime += deltaTime
+        let adjustedDeltaTime = deltaTime * Double(playbackSpeed) * (isReversed ? -1 : 1)
+        currentTime += adjustedDeltaTime
         
-        // Ensure smooth playback by maintaining consistent frame rate
-        if currentTime - lastFrameTime < frameRate {
-            // Return last frame if not enough time has passed
-            return animation.capturedFrames[Int(lastFrameTime / frameRate) % animation.capturedFrames.count].joints
+        let frameRate = Double(animation.frameRate)
+        let totalDuration = Double(animation.duration)
+        
+        // Handle animation looping and completion
+        if totalDuration > 0 {
+            if isReversed {
+                if currentTime < 0 {
+                    if isLooping {
+                        currentTime = totalDuration + currentTime.truncatingRemainder(dividingBy: totalDuration)
+                        notifyListeners(.looped)
+                    } else {
+                        stop()
+                        notifyListeners(.completed)
+                        return []
+                    }
+                }
+            } else {
+                if currentTime > totalDuration {
+                    if isLooping {
+                        currentTime = currentTime.truncatingRemainder(dividingBy: totalDuration)
+                        notifyListeners(.looped)
+                    } else {
+                        stop()
+                        notifyListeners(.completed)
+                        return []
+                    }
+                }
+            }
         }
         
-        lastFrameTime = currentTime
-        
-        let totalDuration = TimeInterval(animation.duration)
-        if totalDuration > 0, currentTime > totalDuration {
-            currentTime = currentTime.truncatingRemainder(dividingBy: totalDuration)
-        }
-        
+        // Calculate current frame index
+        let progress = Float(currentTime / totalDuration)
         let frameCount = animation.capturedFrames.count
-        guard frameCount > 1 else {
-            return animation.capturedFrames.first?.joints ?? []
+        let currentFrameIndex = Int(progress * Float(frameCount - 1)) % frameCount
+        
+        // Return the current frame's joint transforms directly without interpolation
+        return animation.capturedFrames[currentFrameIndex].joints
+    }
+    
+    // Animation control methods
+    func setPlaybackSpeed(_ speed: Float) {
+        playbackSpeed = max(0.1, speed)
+    }
+    
+    func setReversed(_ reversed: Bool) {
+        isReversed = reversed
+    }
+    
+    func toggleDirection() {
+        isReversed = !isReversed
+    }
+    
+    // Event system methods
+    func addEventListener(_ callback: @escaping AnimationEventCallback) {
+        eventCallbacks.append(callback)
+    }
+    
+    func removeAllEventListeners() {
+        eventCallbacks.removeAll()
+    }
+    
+    private func notifyListeners(_ event: AnimationEvent) {
+        eventCallbacks.forEach { callback in
+            callback(event)
         }
-        
-        let frameTime = totalDuration / TimeInterval(frameCount - 1)
-        let currentFrameIndex = Int(currentTime / frameTime)
-        let nextFrameIndex = (currentFrameIndex + 1) % frameCount
-        
-        let currentFrameTime = TimeInterval(currentFrameIndex) * frameTime
-        let frameDelta = Float((currentTime - currentFrameTime) / frameTime)
-        
-        let currentJoints = animation.capturedFrames[currentFrameIndex].joints
-        let nextJoints = animation.capturedFrames[nextFrameIndex].joints
-        
-        return interpolateJointTransforms(
-            from: currentJoints,
-            to: nextJoints,
-            t: frameDelta
-        )
     }
     
-    private func interpolateJointTransforms(from: [mat4f], to: [mat4f], t: Float) -> [mat4f] {
-        let jointCount = min(from.count, to.count)
-        var result = [mat4f](repeating: .identity, count: jointCount)
-        
-        for i in 0..<jointCount {
-            let m0 = from[i]
-            let m1 = to[i]
-            
-            // Decompose matrices into translation, rotation, and scale
-            let (t0, r0, s0) = decomposeMatrix(m0)
-            let (t1, r1, s1) = decomposeMatrix(m1)
-            
-            // Interpolate components
-            let translation = mix(t0, t1, t: t)
-            let rotation = simd_slerp(r0, r1, t)
-            let scale = mix(s0, s1, t: t)
-            
-            // Reconstruct matrix
-            result[i] = composeMatrix(translation: translation, rotation: rotation, scale: scale)
+    // Helper methods
+    func getProgress() -> Float {
+        guard let animation = recordedAnimation,
+              animation.duration > 0 else {
+            return 0
         }
-        
-        return result
+        return Float(currentTime / Double(animation.duration))
     }
     
-    private func decomposeMatrix(_ matrix: mat4f) -> (SIMD3<Float>, simd_quatf, SIMD3<Float>) {
-        let translation = SIMD3<Float>(matrix.columns.3.x, matrix.columns.3.y, matrix.columns.3.z)
-        
-        let rotationMatrix = mat3f(
-            SIMD3<Float>(matrix.columns.0.x, matrix.columns.0.y, matrix.columns.0.z),
-            SIMD3<Float>(matrix.columns.1.x, matrix.columns.1.y, matrix.columns.1.z),
-            SIMD3<Float>(matrix.columns.2.x, matrix.columns.2.y, matrix.columns.2.z)
-        )
-        
-        let scale = SIMD3<Float>(
-            length(SIMD3<Float>(matrix.columns.0.x, matrix.columns.0.y, matrix.columns.0.z)),
-            length(SIMD3<Float>(matrix.columns.1.x, matrix.columns.1.y, matrix.columns.1.z)),
-            length(SIMD3<Float>(matrix.columns.2.x, matrix.columns.2.y, matrix.columns.2.z))
-        )
-        
-        let normalizedRotation = mat3f(
-            normalize(SIMD3<Float>(matrix.columns.0.x, matrix.columns.0.y, matrix.columns.0.z)),
-            normalize(SIMD3<Float>(matrix.columns.1.x, matrix.columns.1.y, matrix.columns.1.z)),
-            normalize(SIMD3<Float>(matrix.columns.2.x, matrix.columns.2.y, matrix.columns.2.z))
-        )
-        
-        let rotation = simd_quaternion(normalizedRotation)
-        
-        return (translation, rotation, scale)
+    var isPlaying: Bool {
+        return state == .playing
     }
     
-    private func composeMatrix(translation: SIMD3<Float>, rotation: simd_quatf, scale: SIMD3<Float>) -> mat4f {
-        let rotationMatrix = mat3f(rotation)
-        let scaledRotation = mat3f(
-            rotationMatrix.columns.0 * scale.x,
-            rotationMatrix.columns.1 * scale.y,
-            rotationMatrix.columns.2 * scale.z
-        )
-        
-        return mat4f(
-            SIMD4<Float>(scaledRotation.columns.0, 0),
-            SIMD4<Float>(scaledRotation.columns.1, 0),
-            SIMD4<Float>(scaledRotation.columns.2, 0),
-            SIMD4<Float>(translation, 1)
-        )
+    var isPaused: Bool {
+        return state == .paused
+    }
+    
+    func getCurrentAnimation() -> CapturedAnimation? {
+        return recordedAnimation
+    }
+    
+    func seekTo(progress: Float) {
+        guard let animation = recordedAnimation else { return }
+        let clampedProgress = min(max(progress, 0), 1)
+        currentTime = Double(clampedProgress) * Double(animation.duration)
     }
 }

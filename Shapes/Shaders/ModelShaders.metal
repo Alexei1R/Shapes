@@ -16,22 +16,19 @@ struct VertexOut {
     float3 normal;
     float2 texCoords;
     float3 worldPos;
-    float3 viewPos;
     float jointWeight;
 };
 
-struct Uniforms {
+struct ModelUniforms {
     float4x4 viewProjectionMatrix;
-    float4x4 model;
+    float4x4 modelMatrix;
     float time;
-    int jointIndex;
+    int selectedJointIndex;
 };
-
-constant int MAX_JOINTS = 91;
 
 vertex VertexOut model_vertex_main(
     ModelVertexIn in [[stage_in]],
-    constant Uniforms &uniforms [[buffer(1)]],
+    constant ModelUniforms &uniforms [[buffer(1)]],
     constant float4x4 *jointMatrices [[buffer(2)]]
 ) {
     VertexOut out;
@@ -39,33 +36,43 @@ vertex VertexOut model_vertex_main(
     // Calculate skinning matrix
     float4x4 skinMatrix = float4x4(0.0);
     for(int i = 0; i < 4; i++) {
-        int jointIndex = in.jointIndices[i];
+        uint jointIndex = in.jointIndices[i];
         float weight = in.jointWeights[i];
-        skinMatrix += jointMatrices[jointIndex] * weight;
+        if (weight > 0) {
+            skinMatrix += jointMatrices[jointIndex] * weight;
+        }
     }
     
-    // Apply skinning
+    // Apply skinning transformation
     float4 skinnedPosition = skinMatrix * float4(in.position, 1.0);
-    float4 worldPosition = uniforms.model * skinnedPosition;
-    out.position = uniforms.viewProjectionMatrix * worldPosition;
+    
+    // Apply model transformation
+    float4 worldPosition = uniforms.modelMatrix * skinnedPosition;
     out.worldPos = worldPosition.xyz;
     
-    // Transform normal by skinning matrix
-    float3x3 normalMatrix = float3x3(
+    // Transform to clip space
+    out.position = uniforms.viewProjectionMatrix * worldPosition;
+    
+    // Transform normal
+    float3x3 skinNormalMatrix = float3x3(
         normalize(skinMatrix[0].xyz),
         normalize(skinMatrix[1].xyz),
         normalize(skinMatrix[2].xyz)
     );
-    out.normal = normalize(normalMatrix * in.normal);
+    float3x3 modelNormalMatrix = float3x3(
+        uniforms.modelMatrix[0].xyz,
+        uniforms.modelMatrix[1].xyz,
+        uniforms.modelMatrix[2].xyz
+    );
+    out.normal = normalize(modelNormalMatrix * skinNormalMatrix * in.normal);
+    
+    // Pass through texture coordinates
     out.texCoords = in.texCoords;
     
-    float4 viewPos = uniforms.viewProjectionMatrix * worldPosition;
-    out.viewPos = viewPos.xyz / viewPos.w;
-    
-    // Get the weight for the selected joint
+    // Calculate joint weight for visualization
     float weight = 0.0;
-    for (int i = 0; i < 4; i++) {
-        if (int(in.jointIndices[i]) == uniforms.jointIndex) {
+    for(int i = 0; i < 4; i++) {
+        if (in.jointIndices[i] == uniforms.selectedJointIndex) {
             weight = in.jointWeights[i];
             break;
         }
@@ -76,27 +83,26 @@ vertex VertexOut model_vertex_main(
 }
 
 fragment float4 model_fragment_main(VertexOut in [[stage_in]]) {
-    float3 lightPos = float3(0.0, 5.0, 5.0);
-    float3 lightColor = float3(1.0, 1.0, 1.0);
-    float3 baseColor = float3(0.7, 0.7, 0.7);
+    // Light properties
+    float3 lightPos = float3(2.0, 5.0, 2.0);
+    float3 lightColor = float3(1.0);
+    float3 baseColor = float3(0.7, 0.7, 0.8);
     
+    // Ambient
     float3 ambient = baseColor * 0.2;
     
+    // Diffuse
     float3 normal = normalize(in.normal);
     float3 lightDir = normalize(lightPos - in.worldPos);
     float diff = max(dot(normal, lightDir), 0.0);
     float3 diffuse = baseColor * lightColor * diff;
     
-    float3 viewDir = normalize(-in.viewPos);
-    float3 reflectDir = reflect(-lightDir, normal);
-    float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
-    float3 specular = lightColor * spec * 0.5;
+    // Final color
+    float3 result = ambient + diffuse;
     
-    float3 finalColor = ambient + diffuse + specular;
-    
-    // Highlight vertices affected by the selected joint
+    // Joint weight visualization
     float3 jointColor = float3(1.0, 0.0, 0.0); // Red for selected joint
-    finalColor = mix(finalColor, jointColor, in.jointWeight);
+    result = mix(result, jointColor, in.jointWeight);
     
-    return float4(finalColor, 1.0);
+    return float4(result, 1.0);
 }

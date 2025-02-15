@@ -25,7 +25,7 @@ struct ModelView: View {
                 .edgesIgnoringSafeArea(.all)
                 .handleEvents(using: eventManager)
                 .onAppear {
-                    drawable.playAnimation(index: 0)
+//                    drawable.playAnimation(index: 0)
                     isPlaying = true
                     hasStarted = true
                 }
@@ -123,43 +123,43 @@ struct ModelView: View {
                         .foregroundColor(.white)
                         .padding(.top, 16)
                     
-                    HStack(spacing: 16) {
-                        Button(action: { drawable.selectPreviousJoint() }) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 20))
-                                .foregroundColor(.yellow)
-                                .frame(width: 44, height: 44)
-                                .background(Color.black.opacity(0.6))
-                                .cornerRadius(12)
-                        }
-                        
-                        Text("Joint \(drawable.currentJointIndex)")
-                            .foregroundColor(.white)
-                            .frame(width: 100)
-                        
-                        Button(action: { drawable.selectNextJoint() }) {
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 20))
-                                .foregroundColor(.yellow)
-                                .frame(width: 44, height: 44)
-                                .background(Color.black.opacity(0.6))
-                                .cornerRadius(12)
-                        }
-                        
-
-                    }
-                    .padding(.horizontal, 16)
+//                    HStack(spacing: 16) {
+//                        Button(action: { drawable.selectPreviousJoint() }) {
+//                            Image(systemName: "chevron.left")
+//                                .font(.system(size: 20))
+//                                .foregroundColor(.yellow)
+//                                .frame(width: 44, height: 44)
+//                                .background(Color.black.opacity(0.6))
+//                                .cornerRadius(12)
+//                        }
+//                        
+//                        Text("Joint \(drawable.currentJointIndex)")
+//                            .foregroundColor(.white)
+//                            .frame(width: 100)
+//                        
+//                        Button(action: { drawable.selectNextJoint() }) {
+//                            Image(systemName: "chevron.right")
+//                                .font(.system(size: 20))
+//                                .foregroundColor(.yellow)
+//                                .frame(width: 44, height: 44)
+//                                .background(Color.black.opacity(0.6))
+//                                .cornerRadius(12)
+//                        }
+//                        
+//
+//                    }
+//                    .padding(.horizontal, 16)
                     
                     Spacer()
                     
-                    Button(action: { drawable.showDebug() }) {
-                        Image(systemName: "wand.and.rays")
-                            .font(.system(size: 20))
-                            .foregroundColor(.purple)
-                            .frame(width: 44, height: 44)
-                            .background(Color.black.opacity(0.6))
-                            .cornerRadius(12)
-                    }
+//                    Button(action: { drawable.showDebug() }) {
+//                        Image(systemName: "wand.and.rays")
+//                            .font(.system(size: 20))
+//                            .foregroundColor(.purple)
+//                            .frame(width: 44, height: 44)
+//                            .background(Color.black.opacity(0.6))
+//                            .cornerRadius(12)
+//                    }
 
                     
                 }

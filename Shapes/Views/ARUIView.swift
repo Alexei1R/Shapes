@@ -8,6 +8,7 @@ struct ARViewContainer: UIViewRepresentable {
     
     var handleFrame: (CapturedFrame) -> Void
     
+    
     func makeUIView(context: Context) -> ARView {
         let arView = ARView(frame: .zero)
         let coordinator = context.coordinator
@@ -32,6 +33,9 @@ struct ARViewContainer: UIViewRepresentable {
     }
     
     class Coordinator: NSObject, ARSessionDelegate {
+        
+        
+        var idFrame : Int = 0
         
         var character: BodyTrackedEntity?
         let characterOffset: SIMD3<Float> = [0, 0, 0]
@@ -73,18 +77,24 @@ struct ARViewContainer: UIViewRepresentable {
                 let bodyPosition = simd_make_float3(bodyAnchor.transform.columns.3)
                 characterAnchor.position = bodyPosition + characterOffset
                 characterAnchor.orientation = Transform(matrix: bodyAnchor.transform).rotation
-                
-                // Use model transforms instead of local transforms
-                let capturedFrame = CapturedFrame(
-                    id: Int(Date().timeIntervalSince1970 * 1000),
-                    joints: bodyAnchor.skeleton.jointModelTransforms
-                )
-                
-                handleFrame(capturedFrame)
-                
                 if let character = character, character.parent == nil {
                     characterAnchor.addChild(character)
                 }
+                
+                
+                
+                //RECORD ANIMATIONS THAT I WILL SAVE TO THE DISK
+                //                var bodyTransform = bodyAnchor.transform
+                //                var globalJointTransforms: [simd_float4x4] = []
+                //                for jointTransform in bodyAnchor.skeleton.jointModelTransforms {
+                //                    let globalTransform = matrix_multiply(bodyTransform , jointTransform)
+                //                    globalJointTransforms.append(globalTransform)
+                //                }
+                let capturedFrame = CapturedFrame(
+                    id: idFrame,
+                    joints:bodyAnchor.skeleton.jointModelTransforms
+                )
+                handleFrame(capturedFrame)
             }
         }
     }

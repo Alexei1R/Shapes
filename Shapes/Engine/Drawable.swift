@@ -1,338 +1,3 @@
-////  Drawable.swift
-////  Shapes
-////
-////  Created by rusu alexei on 04.02.2025.
-////
-//
-//import Foundation
-//import MetalKit
-//
-//enum MovementMode {
-//    case rotate
-//    case moveInPlane
-//}
-//
-//class Drawable: NSObject, ObservableObject {
-//    let device: MTLDevice
-//    var commandQueue: MTLCommandQueue!
-//    var modelPipelineState: MTLRenderPipelineState!
-//    private var depthStencilState: MTLDepthStencilState!
-//    private var camera: Camera!
-//    var model = mat4f.identity
-//    private var time = Time()
-//    private var renderPassDescriptor: RenderPassDescriptor?
-//    private var grid: Grid!
-//    
-//    @Published var selectedAnimation: CapturedAnimation?
-//    
-//    
-//    //DEBUG
-//    private var circleRenderer: CircleRenderer!
-//    
-//    var modelAsset: Model3D?
-//    @Published var currentJointIndex: Int = 0
-//    
-//    private var animationManager: AnimationManager?
-//    private var jointMatricesBuffer: MetalBuffer<matrix_float4x4>?
-//    
-//    struct ModelUniforms {
-//        var viewProjectionMatrix: mat4f
-//        var modelMatrix: mat4f
-//        var time: Float
-//        var selectedJointIndex: Int32
-//    }
-//    
-//    var vertexBuffer: MetalBuffer<ModelVertex>!
-//    var indexBuffer: MetalBuffer<UInt32>!
-//    var uniformsBuffer: MetalBuffer<ModelUniforms>!
-//    let materialManager = MaterialManager()
-//    
-//    var movementMode: MovementMode = .rotate
-//    
-//    init(device: MTLDevice) {
-//        self.device = device
-//        super.init()
-//        setupCamera()
-//        buildPipeline()
-//        model = mat4f.identity.scale(vec3f.one * 0.01)
-//            .translate(vec3f.up * 1)
-//            .rotateDegrees(90, axis: .x)
-//            .rotateDegrees(180, axis: .y)
-//        
-//        // Initialize grid before loading mesh
-//        grid = Grid(device: device)
-//        
-//        //DEBUG
-//        circleRenderer = CircleRenderer(device: device)
-//        
-//        loadMesh()
-//        
-//        if let model3D = modelAsset {
-//            animationManager = AnimationManager(model: model3D)
-//            jointMatricesBuffer = MetalBuffer<matrix_float4x4>(
-//                device: device,
-//                count: model3D.joints.count,
-//                usage: .storageShared
-//            )
-//        }
-//    }
-//    
-//    func setMovementMode(_ mode: MovementMode) {
-//        movementMode = mode
-//    }
-//    
-//    func playAnimation(index: Int) {
-//        animationManager?.play(animationIndex: index)
-//    }
-//    
-//    func pauseAnimation() {
-//        animationManager?.pause()
-//    }
-//    
-//    func resumeAnimation() {
-//        animationManager?.resume()
-//    }
-//    
-//    func stopAnimation() {
-//        animationManager?.stop()
-//    }
-//    
-//    func setAnimation(_ animation: CapturedAnimation) {
-//            self.selectedAnimation = animation
-//            playAnimation(animation)
-//        }
-//
-//        private func playAnimation(_ animation: CapturedAnimation) {
-//            // Implement animation playback logic here
-//        }
-//    
-//    
-//    func showDebug(){
-//        
-//    }
-//    
-//    private func loadMesh() {
-//        if let modelPath = Bundle.main.path(forResource: "robot", ofType: "usdc") {
-//            let modelURL = URL(fileURLWithPath: modelPath)
-//            let model3D = Model3D()
-//            do {
-//                try model3D.load(from: modelURL)
-//                model3D.printAllComponents()
-//                if let firstMesh = model3D.meshes.first,
-//                   let meshData = model3D.extractMeshData(from: firstMesh) {
-//                    vertexBuffer = MetalBuffer<ModelVertex>(
-//                        device: device,
-//                        elements: meshData.vertices,
-//                        usage: .storageShared
-//                    )
-//                    indexBuffer = MetalBuffer<UInt32>(
-//                        device: device,
-//                        elements: meshData.indices,
-//                        usage: .storageShared
-//                    )
-//                }
-//                modelAsset = model3D
-//            } catch {
-//                print("Failed to load model: \(error)")
-//            }
-//        } else {
-//            print("Model file not found in bundle.")
-//        }
-//    }
-//    
-//    private func setupCamera() {
-//        camera = Camera(
-//            position: SIMD3(0, 1, -5),
-//            target: SIMD3(0, 0, 0),
-//            up: SIMD3(0, 1, 0),
-//            fieldOfView: Float.pi / 3,
-//            aspectRatio: 1.0,
-//            nearPlane: 0.1,
-//            farPlane: 10000.0
-//        )
-//    }
-//    
-//    private func setupRenderPass(view: MTKView) -> MTLRenderPassDescriptor? {
-//        guard let currentDrawable = view.currentDrawable else { return nil }
-//        let colorAttachment = ColorAttachmentDescriptor(
-//            texture: currentDrawable.texture,
-//            loadAction: .clear,
-//            storeAction: .store,
-//            clearColor: MTLClearColor(red: 0.1, green: 0.1, blue: 0.1, alpha: 1)
-//        )
-//        let depthAttachment = DepthAttachmentDescriptor(
-//            texture: view.depthStencilTexture,
-//            loadAction: .clear,
-//            storeAction: .dontCare,
-//            clearDepth: 1.0
-//        )
-//        let config = RenderPassBuilder()
-//            .addColorAttachment(colorAttachment)
-//            .setDepthAttachment(depthAttachment)
-//            .setSampleCount(view.sampleCount)
-//            .build()
-//        renderPassDescriptor = RenderPassDescriptor(config: config)
-//        return renderPassDescriptor?.getMTLRenderPassDescriptor()
-//    }
-//    
-//    private func buildPipeline() {
-//        commandQueue = device.makeCommandQueue()
-//        let modelPipelineDescriptor = MTLRenderPipelineDescriptor()
-//        let layout = ShaderLayout([
-//            ShaderElement(type: .vertex, data: "model_vertex_main"),
-//            ShaderElement(type: .fragment, data: "model_fragment_main")
-//        ])
-//        do {
-//            let shaderHandle = try ShaderManager.shared.loadShader(layout: layout)
-//            if let shader = ShaderManager.shared.getShader(shaderHandle) {
-//                modelPipelineDescriptor.vertexFunction = shader.function(of: .vertex)
-//                modelPipelineDescriptor.fragmentFunction = shader.function(of: .fragment)
-//            }
-//        } catch {
-//            print("Shader loading error: \(error)")
-//        }
-//        let vertexLayout = BufferLayout(elements: [
-//            BufferElement(type: .float3, name: "position"),
-//            BufferElement(type: .float3, name: "normal"),
-//            BufferElement(type: .float2, name: "textureCoordinate"),
-//            BufferElement(type: .float3, name: "tangent"),
-//            BufferElement(type: .float3, name: "bitangent"),
-//            BufferElement(type: .uint16x4, name: "indices"),
-//            BufferElement(type: .float4, name: "weight")
-//        ])
-//        modelPipelineDescriptor.vertexDescriptor = vertexLayout.metalVertexDescriptor(bufferIndex: 0)
-//        modelPipelineDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
-//        modelPipelineDescriptor.depthAttachmentPixelFormat = .depth32Float
-//        
-//        // Enable alpha blending
-//        modelPipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
-//        modelPipelineDescriptor.colorAttachments[0].rgbBlendOperation = .add
-//        modelPipelineDescriptor.colorAttachments[0].alphaBlendOperation = .add
-//        modelPipelineDescriptor.colorAttachments[0].sourceRGBBlendFactor = .sourceAlpha
-//        modelPipelineDescriptor.colorAttachments[0].sourceAlphaBlendFactor = .sourceAlpha
-//        modelPipelineDescriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
-//        modelPipelineDescriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
-//        
-//        do {
-//            modelPipelineState = try device.makeRenderPipelineState(descriptor: modelPipelineDescriptor)
-//        } catch {
-//            print("Failed to create pipeline state: \(error)")
-//        }
-//        let depthStencilDescriptor = MTLDepthStencilDescriptor()
-//        depthStencilDescriptor.depthCompareFunction = .less
-//        depthStencilDescriptor.isDepthWriteEnabled = true
-//        depthStencilState = device.makeDepthStencilState(descriptor: depthStencilDescriptor)
-//    }
-//    
-//    func selectNextJoint() {
-//        if let model = modelAsset {
-//            let maxJoint = model.joints.isEmpty ? 0 : model.joints.count - 1
-//            currentJointIndex = min(maxJoint, currentJointIndex + 1)
-//        }
-//    }
-//    
-//    func selectPreviousJoint() {
-//        currentJointIndex = max(0, currentJointIndex - 1)
-//    }
-//}
-//
-//extension Drawable: MTKViewDelegate {
-//    func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
-//        camera.setAspectRatio(Float(size.width) / Float(size.height))
-//    }
-//    
-//    func draw(in view: MTKView) {
-//        guard let renderPassDescriptor = setupRenderPass(view: view),
-//              let drawableTarget = view.currentDrawable,
-//              let commandBuffer = commandQueue.makeCommandBuffer(),
-//              let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor)
-//        else { return }
-//        
-//        time.update()
-//        
-//        if EventManager.shared.isActive, let event = EventManager.shared.currentEvent {
-//            switch event.type {
-//            case .drag:
-//                switch movementMode {
-//                case .rotate:
-//                    camera.orbit(
-//                        deltaTheta: Float(event.delta.x) * 0.005,
-//                        deltaPhi: Float(event.delta.y) * 0.005
-//                    )
-//                case .moveInPlane:
-//                    camera.moveInPlane(
-//                        deltaX: Float(event.delta.x) * 0.01,
-//                        deltaY: Float(event.delta.y) * 0.01
-//                    )
-//                }
-//            case .pinch:
-//                camera.zoom(factor: Float(event.scale))
-//            default:
-//                break
-//            }
-//        }
-//        
-//        // Draw grid first
-//        grid.render(encoder: renderEncoder,
-//                    viewProjectionMatrix: camera.getViewProjectionMatrix())
-//        circleRenderer.render(encoder: renderEncoder, viewProjectionMatrix: camera.getViewProjectionMatrix())
-//
-//        
-//        
-//        if let animationManager = animationManager {
-//            let jointMatrices = animationManager.update(deltaTime: time.deltaTime)
-//            jointMatricesBuffer?.update(with: jointMatrices)
-//        }
-//        
-//        
-//        
-//        
-//        
-//        var modelUniforms = ModelUniforms(
-//            viewProjectionMatrix: camera.getViewProjectionMatrix(),
-//            modelMatrix: model,
-//            time: time.now,
-//            selectedJointIndex: Int32(currentJointIndex)
-//        )
-//        
-//        renderEncoder.setRenderPipelineState(modelPipelineState)
-//        renderEncoder.setDepthStencilState(depthStencilState)
-//        
-//        uniformsBuffer = MetalBuffer<ModelUniforms>(
-//            device: device,
-//            element: modelUniforms,
-//            usage: .uniforms
-//        )
-//        
-//        uniformsBuffer.bind(to: renderEncoder, type: .vertex, index: 1)
-//        vertexBuffer.bind(to: renderEncoder, type: .vertex, index: 0)
-//        
-//        if let jointMatricesBuffer = jointMatricesBuffer {
-//            jointMatricesBuffer.bind(to: renderEncoder, type: .vertex, index: 2)
-//        }
-//        
-//        renderEncoder.drawIndexedPrimitives(
-//            type: .triangle,
-//            indexCount: indexBuffer.count,
-//            indexType: .uint32,
-//            indexBuffer: indexBuffer.raw()!,
-//            indexBufferOffset: 0
-//        )
-//        
-//        renderEncoder.endEncoding()
-//        commandBuffer.present(drawableTarget)
-//        commandBuffer.commit()
-//    }
-//}
-
-
-//
-//  Drawable.swift
-//  Shapes
-//
-//  Created by rusu alexei on 04.02.2025.
-//
-
 import Foundation
 import MetalKit
 
@@ -342,116 +7,91 @@ enum MovementMode {
 }
 
 class Drawable: NSObject, ObservableObject {
+    // MARK: - Core Properties
     let device: MTLDevice
     var commandQueue: MTLCommandQueue!
     var modelPipelineState: MTLRenderPipelineState!
     private var depthStencilState: MTLDepthStencilState!
     private var camera: Camera!
-    var model = mat4f.identity
     private var time = Time()
     private var renderPassDescriptor: RenderPassDescriptor?
     private var grid: Grid!
     
+    // MARK: - Animation and Debug Properties
     @Published var selectedAnimation: CapturedAnimation?
-    
-    //DEBUG
-    private var circleRenderer: CircleRenderer!
-    
-    var modelAsset: Model3D?
-    @Published var currentJointIndex: Int = 0
-    
-    // Default animation manager for disk loaded animations.
-    private var animationManager: AnimationManager?
-    // Custom animation handles only recorded animations.
     private var customAnimation: CustomAnimation?
-    private var jointMatricesBuffer: MetalBuffer<matrix_float4x4>?
+    private var circleRenderer: CircleRenderer!
+    private var jointMatrices: [simd_float4x4] = []
     
+    // MARK: - Model Properties
+    private var modelAsset: Model3D?
+    private var vertexBuffer: MetalBuffer<ModelVertex>?
+    private var indexBuffer: MetalBuffer<UInt32>?
+    private var jointMatricesBuffer: MetalBuffer<simd_float4x4>?
+    
+    // MARK: - Transform Properties
+    var model = mat4f.identity
+        .scale(vec3f(0.01))
+    
+    // MARK: - Uniforms
     struct ModelUniforms {
         var viewProjectionMatrix: mat4f
         var modelMatrix: mat4f
         var time: Float
-        var selectedJointIndex: Int32
+        var hasAnimation: Int32
     }
     
-    var vertexBuffer: MetalBuffer<ModelVertex>!
-    var indexBuffer: MetalBuffer<UInt32>!
-    var uniformsBuffer: MetalBuffer<ModelUniforms>!
-    let materialManager = MaterialManager()
-    
+    private var uniformsBuffer: MetalBuffer<ModelUniforms>!
     var movementMode: MovementMode = .rotate
     
+    // MARK: - Initialization
     init(device: MTLDevice) {
         self.device = device
         super.init()
         setupCamera()
         buildPipeline()
-        model = mat4f.identity.scale(vec3f.one * 0.01)
-            .translate(vec3f.up * 1)
-            .rotateDegrees(90, axis: .x)
-            .rotateDegrees(180, axis: .y)
-        
-        // Initialize grid before loading mesh
+        setupScene()
+        loadModel()
+    }
+    
+    private func setupCamera() {
+        camera = Camera(
+            position: SIMD3(0, 1, -5),
+            target: SIMD3(0, 0, 0),
+            up: SIMD3(0, 1, 0),
+            fieldOfView: Float.pi / 3,
+            aspectRatio: 1.0,
+            nearPlane: 0.1,
+            farPlane: 100.0
+        )
+    }
+    
+    private func setupScene() {
         grid = Grid(device: device)
-        
-        //DEBUG
         circleRenderer = CircleRenderer(device: device)
+        customAnimation = CustomAnimation()
         
-        loadMesh()
+        // Initialize joint matrices buffer
+        jointMatricesBuffer = MetalBuffer<simd_float4x4>(
+            device: device,
+            count: 100,
+            usage: .storageShared
+        )
         
-        if let model3D = modelAsset {
-            // Initialize the default animation manager for disk animations.
-            animationManager = AnimationManager(model: model3D)
-            jointMatricesBuffer = MetalBuffer<matrix_float4x4>(
-                device: device,
-                count: model3D.joints.count,
-                usage: .storageShared
-            )
-        }
+        // Initialize with identity matrices
+        let identityMatrices = [simd_float4x4](
+            repeating: matrix_identity_float4x4,
+            count: 100
+        )
+        jointMatricesBuffer?.update(with: identityMatrices)
     }
     
-    func setMovementMode(_ mode: MovementMode) {
-        movementMode = mode
-    }
-    
-    func playAnimation(index: Int) {
-        animationManager?.play(animationIndex: index)
-    }
-    
-    func pauseAnimation() {
-        animationManager?.pause()
-    }
-    
-    func resumeAnimation() {
-        animationManager?.resume()
-    }
-    
-    func stopAnimation() {
-        animationManager?.stop()
-        customAnimation?.stop()
-    }
-    
-    // Call this function to set a captured animation.
-    // When a captured animation is provided, it is used by CustomAnimation for interpolation.
-    func setAnimation(_ animation: CapturedAnimation) {
-        self.selectedAnimation = animation
-        // Initialize custom animation if not already
-        if customAnimation == nil {
-            customAnimation = CustomAnimation()
-        }
-        customAnimation?.play(animation: animation)
-    }
-    
-    func showDebug(){
-        // Debugging code if needed.
-    }
-    
-    private func loadMesh() {
+    private func loadModel() {
         if let modelPath = Bundle.main.path(forResource: "robot", ofType: "usdc") {
             let modelURL = URL(fileURLWithPath: modelPath)
             let model3D = Model3D()
             do {
                 try model3D.load(from: modelURL)
-                model3D.printAllComponents()
                 if let firstMesh = model3D.meshes.first,
                    let meshData = model3D.extractMeshData(from: firstMesh) {
                     vertexBuffer = MetalBuffer<ModelVertex>(
@@ -465,57 +105,24 @@ class Drawable: NSObject, ObservableObject {
                         usage: .storageShared
                     )
                 }
-                modelAsset = model3D
+                self.modelAsset = model3D
+                print("Model loaded successfully with \(model3D.meshes.count) meshes")
             } catch {
                 print("Failed to load model: \(error)")
             }
-        } else {
-            print("Model file not found in bundle.")
         }
-    }
-    
-    private func setupCamera() {
-        camera = Camera(
-            position: SIMD3(0, 1, -5),
-            target: SIMD3(0, 0, 0),
-            up: SIMD3(0, 1, 0),
-            fieldOfView: Float.pi / 3,
-            aspectRatio: 1.0,
-            nearPlane: 0.1,
-            farPlane: 10000.0
-        )
-    }
-    
-    private func setupRenderPass(view: MTKView) -> MTLRenderPassDescriptor? {
-        guard let currentDrawable = view.currentDrawable else { return nil }
-        let colorAttachment = ColorAttachmentDescriptor(
-            texture: currentDrawable.texture,
-            loadAction: .clear,
-            storeAction: .store,
-            clearColor: MTLClearColor(red: 0.1, green: 0.1, blue: 0.1, alpha: 1)
-        )
-        let depthAttachment = DepthAttachmentDescriptor(
-            texture: view.depthStencilTexture,
-            loadAction: .clear,
-            storeAction: .dontCare,
-            clearDepth: 1.0
-        )
-        let config = RenderPassBuilder()
-            .addColorAttachment(colorAttachment)
-            .setDepthAttachment(depthAttachment)
-            .setSampleCount(view.sampleCount)
-            .build()
-        renderPassDescriptor = RenderPassDescriptor(config: config)
-        return renderPassDescriptor?.getMTLRenderPassDescriptor()
     }
     
     private func buildPipeline() {
         commandQueue = device.makeCommandQueue()
         let modelPipelineDescriptor = MTLRenderPipelineDescriptor()
+        
+        // Set up shader functions
         let layout = ShaderLayout([
             ShaderElement(type: .vertex, data: "model_vertex_main"),
             ShaderElement(type: .fragment, data: "model_fragment_main")
         ])
+        
         do {
             let shaderHandle = try ShaderManager.shared.loadShader(layout: layout)
             if let shader = ShaderManager.shared.getShader(shaderHandle) {
@@ -525,15 +132,18 @@ class Drawable: NSObject, ObservableObject {
         } catch {
             print("Shader loading error: \(error)")
         }
+        
+        // Set up vertex descriptor
         let vertexLayout = BufferLayout(elements: [
             BufferElement(type: .float3, name: "position"),
             BufferElement(type: .float3, name: "normal"),
             BufferElement(type: .float2, name: "textureCoordinate"),
             BufferElement(type: .float3, name: "tangent"),
             BufferElement(type: .float3, name: "bitangent"),
-            BufferElement(type: .uint16x4, name: "indices"),
-            BufferElement(type: .float4, name: "weight")
+            BufferElement(type: .uint16x4, name: "jointIndices"),
+            BufferElement(type: .float4, name: "jointWeights")
         ])
+        
         modelPipelineDescriptor.vertexDescriptor = vertexLayout.metalVertexDescriptor(bufferIndex: 0)
         modelPipelineDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
         modelPipelineDescriptor.depthAttachmentPixelFormat = .depth32Float
@@ -550,26 +160,76 @@ class Drawable: NSObject, ObservableObject {
         do {
             modelPipelineState = try device.makeRenderPipelineState(descriptor: modelPipelineDescriptor)
         } catch {
-            print("Failed to create pipeline state: \(error)")
+            fatalError("Failed to create pipeline state: \(error)")
         }
+        
         let depthStencilDescriptor = MTLDepthStencilDescriptor()
         depthStencilDescriptor.depthCompareFunction = .less
         depthStencilDescriptor.isDepthWriteEnabled = true
         depthStencilState = device.makeDepthStencilState(descriptor: depthStencilDescriptor)
     }
     
-    func selectNextJoint() {
-        if let model = modelAsset {
-            let maxJoint = model.joints.isEmpty ? 0 : model.joints.count - 1
-            currentJointIndex = min(maxJoint, currentJointIndex + 1)
-        }
+    // MARK: - Animation Control
+    func setAnimation(_ animation: CapturedAnimation) {
+        selectedAnimation = animation
+        customAnimation?.play(animation: animation)
+        print("Animation set: \(animation.name)")
     }
     
-    func selectPreviousJoint() {
-        currentJointIndex = max(0, currentJointIndex - 1)
+    func pauseAnimation() {
+        customAnimation?.pause()
+        print("Animation paused")
+    }
+    
+    func resumeAnimation() {
+        customAnimation?.resume()
+        print("Animation resumed")
+    }
+    
+    func stopAnimation() {
+        customAnimation?.stop()
+        selectedAnimation = nil
+        jointMatrices.removeAll()
+        circleRenderer.updateCircles([])
+        // Reset to identity matrices
+        let identityMatrices = [simd_float4x4](repeating: matrix_identity_float4x4, count: 100)
+        jointMatricesBuffer?.update(with: identityMatrices)
+        print("Animation stopped")
+    }
+    
+    func setMovementMode(_ mode: MovementMode) {
+        movementMode = mode
+    }
+    
+    private func setupRenderPass(view: MTKView) -> MTLRenderPassDescriptor? {
+        guard let currentDrawable = view.currentDrawable else { return nil }
+        
+        let colorAttachment = ColorAttachmentDescriptor(
+            texture: currentDrawable.texture,
+            loadAction: .clear,
+            storeAction: .store,
+            clearColor: MTLClearColor(red: 0.1, green: 0.1, blue: 0.1, alpha: 1)
+        )
+        
+        let depthAttachment = DepthAttachmentDescriptor(
+            texture: view.depthStencilTexture,
+            loadAction: .clear,
+            storeAction: .dontCare,
+            clearDepth: 1.0
+        )
+        
+        let config = RenderPassBuilder()
+            .addColorAttachment(colorAttachment)
+            .setDepthAttachment(depthAttachment)
+            .setSampleCount(view.sampleCount)
+            .build()
+        
+        renderPassDescriptor = RenderPassDescriptor(config: config)
+        return renderPassDescriptor?.getMTLRenderPassDescriptor()
     }
 }
 
+// MARK: - MTKViewDelegate
 extension Drawable: MTKViewDelegate {
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
         camera.setAspectRatio(Float(size.width) / Float(size.height))
@@ -584,6 +244,7 @@ extension Drawable: MTKViewDelegate {
         
         time.update()
         
+        // Handle camera controls
         if EventManager.shared.isActive, let event = EventManager.shared.currentEvent {
             switch event.type {
             case .drag:
@@ -606,66 +267,77 @@ extension Drawable: MTKViewDelegate {
             }
         }
         
-        // Draw grid first
+        // Draw grid
         grid.render(encoder: renderEncoder,
-                    viewProjectionMatrix: camera.getViewProjectionMatrix())
+                   viewProjectionMatrix: camera.getViewProjectionMatrix())
         
-//        if let animationManager = animationManager {
-//            let jointMatrices = animationManager.update(deltaTime: time.deltaTime)
-//            jointMatricesBuffer?.update(with: jointMatrices)
-//        }
-
-        
-        
-        if let captured = selectedAnimation, let customAnim = customAnimation {
-            let jointMatrices = customAnim.update(deltaTime: time.deltaTime)
+        // Update animation and debug circles
+        if let animation = selectedAnimation,
+           let customAnim = customAnimation {
+            jointMatrices = customAnim.update(deltaTime: time.deltaTime)
             
-//            jointMatricesBuffer?.update(with: jointMatrices)
-            let circles: [DebugCircle] = jointMatrices.map { matrix in
-                let matTR = mat4f.identity.translate(vec3f.up * 0.5)
-                let worldPos =   matTR * (matrix * vec4f(0, 0, 0, 1))
-                return DebugCircle(position: vec3f(worldPos.x, worldPos.y, worldPos.z) , radius: 0.01)
+            if !jointMatrices.isEmpty {
+                // Update joint matrices buffer
+                jointMatricesBuffer?.update(with: jointMatrices)
+                
+                // Create debug circles for joints
+                let circles: [DebugCircle] = jointMatrices.map { matrix in
+                    let position = SIMD3<Float>(
+                        matrix.columns.3.x,
+                        matrix.columns.3.y,
+                        matrix.columns.3.z
+                    )
+                    return DebugCircle(
+                        position: position,
+                        color: vec4f(1, 0, 0, 1),
+                        radius: 0.01
+                    )
+                }
+                circleRenderer.updateCircles(circles)
             }
-            
-            circleRenderer.updateCircles(circles)
-            
-
         }
         
-        circleRenderer.render(encoder: renderEncoder, viewProjectionMatrix: camera.getViewProjectionMatrix())
-
         
-        var modelUniforms = ModelUniforms(
-            viewProjectionMatrix: camera.getViewProjectionMatrix(),
-            modelMatrix: model,
-            time: time.now,
-            selectedJointIndex: Int32(currentJointIndex)
-        )
-        
-        renderEncoder.setRenderPipelineState(modelPipelineState)
-        renderEncoder.setDepthStencilState(depthStencilState)
-        
-        uniformsBuffer = MetalBuffer<ModelUniforms>(
-            device: device,
-            element: modelUniforms,
-            usage: .uniforms
-        )
-        
-        uniformsBuffer.bind(to: renderEncoder, type: .vertex, index: 1)
-        vertexBuffer.bind(to: renderEncoder, type: .vertex, index: 0)
-        
-        if let jointMatricesBuffer = jointMatricesBuffer {
-            jointMatricesBuffer.bind(to: renderEncoder, type: .vertex, index: 2)
+        // Draw model
+        if let vertexBuffer = vertexBuffer,
+           let indexBuffer = indexBuffer {
+            
+            let modelUniforms = ModelUniforms(
+                viewProjectionMatrix: camera.getViewProjectionMatrix(),
+                modelMatrix: model,
+                time: time.now,
+                hasAnimation: selectedAnimation != nil ? 1 : 0
+            )
+            
+            uniformsBuffer = MetalBuffer<ModelUniforms>(
+                device: device,
+                element: modelUniforms,
+                usage: .uniforms
+            )
+            
+            renderEncoder.setRenderPipelineState(modelPipelineState)
+            renderEncoder.setDepthStencilState(depthStencilState)
+            
+            uniformsBuffer.bind(to: renderEncoder, type: .vertex, index: 1)
+            vertexBuffer.bind(to: renderEncoder, type: .vertex, index: 0)
+            jointMatricesBuffer?.bind(to: renderEncoder, type: .vertex, index: 2)
+            
+            renderEncoder.drawIndexedPrimitives(
+                type: .triangle,
+                indexCount: indexBuffer.count,
+                indexType: .uint32,
+                indexBuffer: indexBuffer.raw()!,
+                indexBufferOffset: 0
+            )
         }
         
-//        renderEncoder.drawIndexedPrimitives(
-//            type: .triangle,
-//            indexCount: indexBuffer.count,
-//            indexType: .uint32,
-//            indexBuffer: indexBuffer.raw()!,
-//            indexBufferOffset: 0
-//        )
         
+        // Draw debug circle
+        circleRenderer.render(
+            encoder: renderEncoder,
+            viewProjectionMatrix: camera.getViewProjectionMatrix()
+        )
+
         renderEncoder.endEncoding()
         commandBuffer.present(drawableTarget)
         commandBuffer.commit()
