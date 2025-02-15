@@ -116,6 +116,7 @@ struct ModelView: View {
                         showingSettings = false
                     }
                 
+                
                 VStack(spacing: 16) {
                     Text("Joint Controls")
                         .font(.title2)
@@ -144,20 +145,41 @@ struct ModelView: View {
                                 .background(Color.black.opacity(0.6))
                                 .cornerRadius(12)
                         }
+                        
+
                     }
                     .padding(.horizontal, 16)
                     
                     Spacer()
+                    
+                    Button(action: { drawable.showDebug() }) {
+                        Image(systemName: "wand.and.rays")
+                            .font(.system(size: 20))
+                            .foregroundColor(.purple)
+                            .frame(width: 44, height: 44)
+                            .background(Color.black.opacity(0.6))
+                            .cornerRadius(12)
+                    }
+
+                    
                 }
-                .frame(width: 300, height: 200)
-                .background(Color.black.opacity(0.8))
+                .frame(width: 300, height: 200 , alignment: .init(horizontal: .center, vertical: .bottom))
+                .background(Color.black.opacity(0.5))
                 .cornerRadius(16)
                 .shadow(radius: 10)
+                
             }
         }
         .sheet(isPresented: $showAnimationSelector) {
             AnimationSelectorView(selectedAnimation: $selectedAnimation)
         }
+        .onChange(of: selectedAnimation) { newAnimation in
+            if let animation = newAnimation {
+                drawable.setAnimation(animation)
+            }
+        }
+
+        
     }
     
     private func modeButton(iconName: String, color: Color, action: @escaping () -> Void) -> some View {

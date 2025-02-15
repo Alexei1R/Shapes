@@ -38,15 +38,19 @@ temp_file=$(mktemp)
 files=(
     "Engine/Drawable.swift"
     # "Engine/Renderer/Model.swift"
-    # "Engine/Renderer/Animation.swift"
+    "Engine/Renderer/Animation.swift"
+    "Engine/Renderer/CustomAnimation.swift"
+
+    "Views/ARUIView.swift"
+    "Service/AnimationRecorder.swift"
     # "Engine/Utils/Time.swift"
     # "Shaders/ModelShaders.metal"
     # "Shaders/Circle.metal"
-    "ContentView.swift"
-    "ScanView.swift"
-    
-    "Engine/Renderer/Camera.swift"
-    "Math/Math.swift"
+    # "ContentView.swift"
+    # "ScanView.swift"
+    #
+    # "Engine/Renderer/Camera.swift"
+    # "Math/Math.swift"
 )
 
 # Append contents of each file to temp file

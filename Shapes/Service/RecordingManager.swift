@@ -20,6 +20,7 @@ final class RecordingManager: ObservableObject {
             let decoder = JSONDecoder()
             var fileURLs = try FileManager.default.contentsOfDirectory(at: disk.recordings, includingPropertiesForKeys: nil)
             for url in fileURLs {
+                print(url.absoluteString)
                 let data = try Data(contentsOf: url)
                 let decodedData = try decoder.decode(CapturedAnimation.self, from: data)
                 recordings.append(decodedData)
