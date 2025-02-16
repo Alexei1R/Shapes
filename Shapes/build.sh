@@ -43,12 +43,14 @@ files=(
 
     "Views/ARUIView.swift"
     "Service/AnimationRecorder.swift"
+
     # "Engine/Utils/Time.swift"
     "Shaders/ModelShaders.metal"
-    "Shaders/Circle.metal"
-    "Engine/Primitives/Circle.swift"
+    # "Shaders/Circle.metal"
+    # "Engine/Primitives/Circle.swift"
     # "ContentView.swift"
     # "ScanView.swift"
+    #
     #
     # "Engine/Renderer/Camera.swift"
     # "Math/Math.swift"

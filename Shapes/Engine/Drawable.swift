@@ -21,17 +21,19 @@ class Drawable: NSObject, ObservableObject {
     @Published var selectedAnimation: CapturedAnimation?
     private var customAnimation: CustomAnimation?
     private var circleRenderer: CircleRenderer!
-    private var jointMatrices: [simd_float4x4] = []
+    private var jointMatrices: [mat4f] = []
     
     // MARK: - Model Properties
     private var modelAsset: Model3D?
     private var vertexBuffer: MetalBuffer<ModelVertex>?
     private var indexBuffer: MetalBuffer<UInt32>?
-    private var jointMatricesBuffer: MetalBuffer<simd_float4x4>?
+    private var jointMatricesBuffer: MetalBuffer<mat4f>?
     
     // MARK: - Transform Properties
-    var model = mat4f.identity
+    var model: mat4f = mat4f.identity
         .scale(vec3f(0.01))
+        .rotateDegrees(90, axis: .x)
+        .rotateDegrees(180, axis: .y)
     
     // MARK: - Uniforms
     struct ModelUniforms {
@@ -56,9 +58,9 @@ class Drawable: NSObject, ObservableObject {
     
     private func setupCamera() {
         camera = Camera(
-            position: SIMD3(0, 1, -5),
-            target: SIMD3(0, 0, 0),
-            up: SIMD3(0, 1, 0),
+            position: vec3f(0, 1, -5),
+            target: vec3f.zero,
+            up: vec3f.up,
             fieldOfView: Float.pi / 3,
             aspectRatio: 1.0,
             nearPlane: 0.1,
@@ -72,43 +74,43 @@ class Drawable: NSObject, ObservableObject {
         customAnimation = CustomAnimation()
         
         // Initialize joint matrices buffer
-        jointMatricesBuffer = MetalBuffer<simd_float4x4>(
+        jointMatricesBuffer = MetalBuffer<mat4f>(
             device: device,
             count: 100,
             usage: .storageShared
         )
         
         // Initialize with identity matrices
-        let identityMatrices = [simd_float4x4](
-            repeating: matrix_identity_float4x4,
-            count: 100
-        )
+        let identityMatrices = Array(repeating: mat4f.identity, count: 100)
         jointMatricesBuffer?.update(with: identityMatrices)
     }
     
     private func loadModel() {
         if let modelPath = Bundle.main.path(forResource: "robot", ofType: "usdc") {
             let modelURL = URL(fileURLWithPath: modelPath)
-            let model3D = Model3D()
-            do {
-                try model3D.load(from: modelURL)
-                if let firstMesh = model3D.meshes.first,
-                   let meshData = model3D.extractMeshData(from: firstMesh) {
-                    vertexBuffer = MetalBuffer<ModelVertex>(
-                        device: device,
-                        elements: meshData.vertices,
-                        usage: .storageShared
-                    )
-                    indexBuffer = MetalBuffer<UInt32>(
-                        device: device,
-                        elements: meshData.indices,
-                        usage: .storageShared
-                    )
+            
+            if let device = Engine.shared?.device {
+                let model3D = Model3D()
+                do {
+                    try model3D.load(from: modelURL)
+                    if let firstMesh = model3D.meshes.first,
+                       let meshData = model3D.extractMeshData(from: firstMesh) {
+                        vertexBuffer = MetalBuffer<ModelVertex>(
+                            device: device,
+                            elements: meshData.vertices,
+                            usage: .storageShared
+                        )
+                        indexBuffer = MetalBuffer<UInt32>(
+                            device: device,
+                            elements: meshData.indices,
+                            usage: .storageShared
+                        )
+                    }
+                    self.modelAsset = model3D
+                    print("Model loaded successfully with \(model3D.meshes.count) meshes")
+                } catch {
+                    print("Failed to load model: \(error)")
                 }
-                self.modelAsset = model3D
-                print("Model loaded successfully with \(model3D.meshes.count) meshes")
-            } catch {
-                print("Failed to load model: \(error)")
             }
         }
     }
@@ -169,6 +171,15 @@ class Drawable: NSObject, ObservableObject {
         depthStencilState = device.makeDepthStencilState(descriptor: depthStencilDescriptor)
     }
     
+    // MARK: - Animation Matrix Transformation
+    private func transformAnimationMatrices(_ matrices: [mat4f]) -> [mat4f] {
+        return matrices.map { jointMatrix in
+            // Convert joint matrix to model space
+            let modelInv = model.inverse()
+            return model * jointMatrix * modelInv
+        }
+    }
+    
     // MARK: - Animation Control
     func setAnimation(_ animation: CapturedAnimation) {
         selectedAnimation = animation
@@ -192,40 +203,13 @@ class Drawable: NSObject, ObservableObject {
         jointMatrices.removeAll()
         circleRenderer.updateCircles([])
         // Reset to identity matrices
-        let identityMatrices = [simd_float4x4](repeating: matrix_identity_float4x4, count: 100)
+        let identityMatrices = Array(repeating: mat4f.identity, count: 100)
         jointMatricesBuffer?.update(with: identityMatrices)
         print("Animation stopped")
     }
     
     func setMovementMode(_ mode: MovementMode) {
         movementMode = mode
-    }
-    
-    private func setupRenderPass(view: MTKView) -> MTLRenderPassDescriptor? {
-        guard let currentDrawable = view.currentDrawable else { return nil }
-        
-        let colorAttachment = ColorAttachmentDescriptor(
-            texture: currentDrawable.texture,
-            loadAction: .clear,
-            storeAction: .store,
-            clearColor: MTLClearColor(red: 0.1, green: 0.1, blue: 0.1, alpha: 1)
-        )
-        
-        let depthAttachment = DepthAttachmentDescriptor(
-            texture: view.depthStencilTexture,
-            loadAction: .clear,
-            storeAction: .dontCare,
-            clearDepth: 1.0
-        )
-        
-        let config = RenderPassBuilder()
-            .addColorAttachment(colorAttachment)
-            .setDepthAttachment(depthAttachment)
-            .setSampleCount(view.sampleCount)
-            .build()
-        
-        renderPassDescriptor = RenderPassDescriptor(config: config)
-        return renderPassDescriptor?.getMTLRenderPassDescriptor()
     }
 }
 
@@ -277,12 +261,13 @@ extension Drawable: MTKViewDelegate {
             jointMatrices = customAnim.update(deltaTime: time.deltaTime)
             
             if !jointMatrices.isEmpty {
-                // Update joint matrices buffer
-                jointMatricesBuffer?.update(with: jointMatrices)
+                // Transform and update joint matrices for model animation
+                let transformedMatrices = transformAnimationMatrices(jointMatrices)
+                jointMatricesBuffer?.update(with: transformedMatrices)
                 
-                // Create debug circles for joints
+                // Create debug circles using original matrices for visualization
                 let circles: [DebugCircle] = jointMatrices.map { matrix in
-                    let position = SIMD3<Float>(
+                    let position = vec3f(
                         matrix.columns.3.x,
                         matrix.columns.3.y,
                         matrix.columns.3.z
@@ -296,7 +281,6 @@ extension Drawable: MTKViewDelegate {
                 circleRenderer.updateCircles(circles)
             }
         }
-        
         
         // Draw model
         if let vertexBuffer = vertexBuffer,
@@ -331,15 +315,41 @@ extension Drawable: MTKViewDelegate {
             )
         }
         
-        
-        // Draw debug circle
+        // Draw debug circles
         circleRenderer.render(
             encoder: renderEncoder,
             viewProjectionMatrix: camera.getViewProjectionMatrix()
         )
-
+        
         renderEncoder.endEncoding()
         commandBuffer.present(drawableTarget)
         commandBuffer.commit()
+    }
+    
+    private func setupRenderPass(view: MTKView) -> MTLRenderPassDescriptor? {
+        guard let currentDrawable = view.currentDrawable else { return nil }
+        
+        let colorAttachment = ColorAttachmentDescriptor(
+            texture: currentDrawable.texture,
+            loadAction: .clear,
+            storeAction: .store,
+            clearColor: MTLClearColor(red: 0.1, green: 0.1, blue: 0.1, alpha: 1)
+        )
+        
+        let depthAttachment = DepthAttachmentDescriptor(
+            texture: view.depthStencilTexture,
+            loadAction: .clear,
+            storeAction: .dontCare,
+            clearDepth: 1.0
+        )
+        
+        let config = RenderPassBuilder()
+            .addColorAttachment(colorAttachment)
+            .setDepthAttachment(depthAttachment)
+            .setSampleCount(view.sampleCount)
+            .build()
+        
+        renderPassDescriptor = RenderPassDescriptor(config: config)
+        return renderPassDescriptor?.getMTLRenderPassDescriptor()
     }
 }

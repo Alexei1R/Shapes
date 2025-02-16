@@ -83,45 +83,73 @@ class CustomAnimation {
         let adjustedDeltaTime = deltaTime * Double(playbackSpeed) * (isReversed ? -1 : 1)
         currentTime += adjustedDeltaTime
         
-        let frameRate = Double(animation.frameRate)
         let totalDuration = Double(animation.duration)
         
-        // Handle animation looping and completion
+        // Handle looping and boundaries
         if totalDuration > 0 {
-            if isReversed {
-                if currentTime < 0 {
-                    if isLooping {
-                        currentTime = totalDuration + currentTime.truncatingRemainder(dividingBy: totalDuration)
-                        notifyListeners(.looped)
-                    } else {
-                        stop()
-                        notifyListeners(.completed)
-                        return []
-                    }
+            if currentTime >= totalDuration {
+                if isLooping {
+                    currentTime = currentTime.truncatingRemainder(dividingBy: totalDuration)
+                    notifyListeners(.looped)
+                } else {
+                    currentTime = totalDuration
+                    stop()
+                    notifyListeners(.completed)
+                    return animation.capturedFrames.last?.joints ?? []
                 }
-            } else {
-                if currentTime > totalDuration {
-                    if isLooping {
-                        currentTime = currentTime.truncatingRemainder(dividingBy: totalDuration)
-                        notifyListeners(.looped)
-                    } else {
-                        stop()
-                        notifyListeners(.completed)
-                        return []
-                    }
+            } else if currentTime < 0 {
+                if isLooping {
+                    currentTime = totalDuration + currentTime.truncatingRemainder(dividingBy: totalDuration)
+                    notifyListeners(.looped)
+                } else {
+                    currentTime = 0
+                    stop()
+                    notifyListeners(.completed)
+                    return animation.capturedFrames.first?.joints ?? []
                 }
             }
         }
         
-        // Calculate current frame index
-        let progress = Float(currentTime / totalDuration)
+        // Calculate frame indices for interpolation
         let frameCount = animation.capturedFrames.count
-        let currentFrameIndex = Int(progress * Float(frameCount - 1)) % frameCount
+        let progress = Float(currentTime / totalDuration)
+        let exactFrame = progress * Float(frameCount - 1)
+        let currentFrameIndex = Int(floor(exactFrame))
+        let nextFrameIndex = min(currentFrameIndex + 1, frameCount - 1)
+        let interpolationFactor = exactFrame - Float(currentFrameIndex)
         
-        // Return the current frame's joint transforms directly without interpolation
-        return animation.capturedFrames[currentFrameIndex].joints
+        // Get frames for interpolation
+        let currentFrame = animation.capturedFrames[currentFrameIndex]
+        let nextFrame = animation.capturedFrames[nextFrameIndex]
+        
+        // Interpolate between frames
+        return interpolateJointMatrices(
+            from: currentFrame.joints,
+            to: nextFrame.joints,
+            factor: interpolationFactor
+        )
     }
-    
+
+    private func interpolateJointMatrices(from: [mat4f], to: [mat4f], factor: Float) -> [mat4f] {
+        guard from.count == to.count else { return from }
+        
+        return zip(from, to).map { current, next in
+            let currentRotation = simd_quatf(current)
+            let nextRotation = simd_quatf(next)
+            
+            let currentTranslation = vec3f(current.columns.3.x, current.columns.3.y, current.columns.3.z)
+            let nextTranslation = vec3f(next.columns.3.x, next.columns.3.y, next.columns.3.z)
+            
+            let interpolatedRotation = simd_slerp(currentRotation, nextRotation, factor)
+            
+            let interpolatedTranslation = mix(currentTranslation, nextTranslation, t: factor)
+            
+            var result = mat4f(interpolatedRotation)
+            result.columns.3 = vec4f(interpolatedTranslation.x, interpolatedTranslation.y, interpolatedTranslation.z, 1)
+            
+            return result
+        }
+    }
     // Animation control methods
     func setPlaybackSpeed(_ speed: Float) {
         playbackSpeed = max(0.1, speed)

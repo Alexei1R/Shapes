@@ -17,13 +17,14 @@ struct VertexOut {
     float2 texCoords;
     float3 worldPos;
     float jointWeight;
+    float3 debugJoint; 
 };
 
 struct ModelUniforms {
     float4x4 viewProjectionMatrix;
     float4x4 modelMatrix;
     float time;
-    int selectedJointIndex;
+    int hasAnimation;
 };
 
 vertex VertexOut model_vertex_main(
@@ -33,20 +34,29 @@ vertex VertexOut model_vertex_main(
 ) {
     VertexOut out;
     
-    // Calculate skinning matrix
-    float4x4 skinMatrix = float4x4(0.0);
+    // Initialize skinning matrix with identity
+    float4x4 skinMatrix = float4x4(1.0);
+    float totalWeight = 0.0;
+    
+    // Calculate skinning matrix with weight normalization
     for(int i = 0; i < 4; i++) {
         uint jointIndex = in.jointIndices[i];
         float weight = in.jointWeights[i];
         if (weight > 0) {
+            totalWeight += weight;
             skinMatrix += jointMatrices[jointIndex] * weight;
         }
     }
     
-    // Apply skinning transformation
+    // Normalize weights if needed
+    if (totalWeight > 0) {
+        skinMatrix = skinMatrix / totalWeight;
+    }
+    
+    // Apply skinning transformation in model space
     float4 skinnedPosition = skinMatrix * float4(in.position, 1.0);
     
-    // Apply model transformation
+    // Transform to world space
     float4 worldPosition = uniforms.modelMatrix * skinnedPosition;
     out.worldPos = worldPosition.xyz;
     
@@ -54,30 +64,20 @@ vertex VertexOut model_vertex_main(
     out.position = uniforms.viewProjectionMatrix * worldPosition;
     
     // Transform normal
-    float3x3 skinNormalMatrix = float3x3(
-        normalize(skinMatrix[0].xyz),
-        normalize(skinMatrix[1].xyz),
-        normalize(skinMatrix[2].xyz)
+    float3x3 normalMatrix = float3x3(
+        skinMatrix[0].xyz,
+        skinMatrix[1].xyz,
+        skinMatrix[2].xyz
     );
     float3x3 modelNormalMatrix = float3x3(
         uniforms.modelMatrix[0].xyz,
         uniforms.modelMatrix[1].xyz,
         uniforms.modelMatrix[2].xyz
     );
-    out.normal = normalize(modelNormalMatrix * skinNormalMatrix * in.normal);
+    out.normal = normalize(modelNormalMatrix * normalMatrix * in.normal);
     
-    // Pass through texture coordinates
     out.texCoords = in.texCoords;
-    
-    // Calculate joint weight for visualization
-    float weight = 0.0;
-    for(int i = 0; i < 4; i++) {
-        if (in.jointIndices[i] == uniforms.selectedJointIndex) {
-            weight = in.jointWeights[i];
-            break;
-        }
-    }
-    out.jointWeight = weight;
+    out.jointWeight = 0.0;
     
     return out;
 }
@@ -99,10 +99,6 @@ fragment float4 model_fragment_main(VertexOut in [[stage_in]]) {
     
     // Final color
     float3 result = ambient + diffuse;
-    
-    // Joint weight visualization
-    float3 jointColor = float3(1.0, 0.0, 0.0); // Red for selected joint
-    result = mix(result, jointColor, in.jointWeight);
     
     return float4(result, 1.0);
 }
