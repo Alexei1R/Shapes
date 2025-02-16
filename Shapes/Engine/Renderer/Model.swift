@@ -50,18 +50,6 @@ public class Model3D {
     private(set) var skeleton: MDLSkeleton?
     private(set) var joints: [ModelJoint] = []
     
-    // MARK: - Transformation Matrix
-    private let coordinateTransform: mat4f = {
-        // Convert from Z-up to Y-up and flip Z for Metal's coordinate system
-        let toYUp = mat4f(
-            vec4f(1, 0,  0, 0),
-            vec4f(0, 0, -1, 0),
-            vec4f(0, 1,  0, 0),
-            vec4f(0, 0,  0, 1)
-        )
-        let flipZ = mat4f(diagonal: vec4f(1, 1, -1, 1))
-        return flipZ * toYUp
-    }()
     
     // MARK: - Vertex Layout Configuration
     private let vertexDescriptor: MDLVertexDescriptor = {
@@ -174,7 +162,7 @@ public class Model3D {
         
         for mesh in meshes {
             let transform = MDLTransform()
-            transform.setLocalTransform(coordinateTransform)
+            //            transform.setLocalTransform(coordinateTransform)
             mesh.transform = transform
             
             if let attributes = mesh.vertexDescriptor.attributes as? [MDLVertexAttribute] {
@@ -233,8 +221,8 @@ public class Model3D {
             let parentPath = components.dropLast().joined(separator: "/")
             let parentIndex = pathToIndex[parentPath]
             
-            let bindTransform = coordinateTransform * bindTransforms[i] * coordinateTransform.inverse()
-            let restTransform = coordinateTransform * restTransforms[i] * coordinateTransform.inverse()
+            let bindTransform =   bindTransforms[i]
+            let restTransform =   restTransforms[i]
             
             joints.append(ModelJoint(
                 id: i,
@@ -313,7 +301,7 @@ public class Model3D {
                 let position = baseAddress.advanced(by: offset)
                     .assumingMemoryBound(to: vec3f.self)
                     .pointee
-                let transformed = coordinateTransform * vec4f(position.x, position.y, position.z, 1)
+                let transformed = vec4f(position.x, position.y, position.z, 1)
                 vertex.position = vec3f(transformed.x, transformed.y, transformed.z) / transformed.w
             }
             
@@ -322,7 +310,7 @@ public class Model3D {
                 let normal = baseAddress.advanced(by: offset)
                     .assumingMemoryBound(to: vec3f.self)
                     .pointee
-                let transformed = coordinateTransform * vec4f(normal.x, normal.y, normal.z, 0)
+                let transformed =  vec4f(normal.x, normal.y, normal.z, 0)
                 vertex.normal = normalize(vec3f(transformed.x, transformed.y, transformed.z))
             }
             
@@ -338,7 +326,7 @@ public class Model3D {
                 let tangent = baseAddress.advanced(by: offset)
                     .assumingMemoryBound(to: vec3f.self)
                     .pointee
-                let transformed = coordinateTransform * vec4f(tangent.x, tangent.y, tangent.z, 0)
+                let transformed =  vec4f(tangent.x, tangent.y, tangent.z, 0)
                 vertex.tangent = normalize(vec3f(transformed.x, transformed.y, transformed.z))
             }
             
@@ -347,7 +335,7 @@ public class Model3D {
                 let bitangent = baseAddress.advanced(by: offset)
                     .assumingMemoryBound(to: vec3f.self)
                     .pointee
-                let transformed = coordinateTransform * vec4f(bitangent.x, bitangent.y, bitangent.z, 0)
+                let transformed =  vec4f(bitangent.x, bitangent.y, bitangent.z, 0)
                 vertex.bitangent = normalize(vec3f(transformed.x, transformed.y, transformed.z))
             }
             
@@ -376,80 +364,80 @@ public class Model3D {
             vertices.append(vertex)
         }
         // Extract indices
-                var indices = [UInt32]()
-                if let submeshes = mesh.submeshes as? [MDLSubmesh] {
-                    for submesh in submeshes {
-                        guard let indexBuffer = submesh.indexBuffer as? MDLMeshBuffer else { continue }
-                        
-                        let indexMap = indexBuffer.map()
-                        let indexData = indexMap.bytes
-                        let indexCount = submesh.indexCount
-                        
-                        switch submesh.indexType {
-                        case .uInt32:
-                            let ptr = indexData.assumingMemoryBound(to: UInt32.self)
-                            indices.append(contentsOf: UnsafeBufferPointer(start: ptr, count: indexCount))
-                            
-                        case .uInt16:
-                            let ptr = indexData.assumingMemoryBound(to: UInt16.self)
-                            indices.append(contentsOf: UnsafeBufferPointer(start: ptr, count: indexCount)
-                                .map { UInt32($0) })
-                            
-                        case .uInt8:
-                            let ptr = indexData.assumingMemoryBound(to: UInt8.self)
-                            indices.append(contentsOf: UnsafeBufferPointer(start: ptr, count: indexCount)
-                                .map { UInt32($0) })
-                            
-                        @unknown default:
-                            continue
-                        }
-                    }
-                }
+        var indices = [UInt32]()
+        if let submeshes = mesh.submeshes as? [MDLSubmesh] {
+            for submesh in submeshes {
+                guard let indexBuffer = submesh.indexBuffer as? MDLMeshBuffer else { continue }
                 
-                guard !vertices.isEmpty, !indices.isEmpty else {
-                    return nil
-                }
+                let indexMap = indexBuffer.map()
+                let indexData = indexMap.bytes
+                let indexCount = submesh.indexCount
                 
-                return MeshData(vertices: vertices, indices: indices)
-            }
-            
-            // MARK: - Debug Information
-            public func printModelInfo() {
-                print("\n=== Model Information ===")
-                print("Number of meshes: \(meshes.count)")
-                
-                for (index, mesh) in meshes.enumerated() {
-                    print("\nMesh \(index + 1):")
-                    print("- Vertex count: \(mesh.vertexCount)")
-                    print("- Submesh count: \(mesh.submeshes?.count ?? 0)")
+                switch submesh.indexType {
+                case .uInt32:
+                    let ptr = indexData.assumingMemoryBound(to: UInt32.self)
+                    indices.append(contentsOf: UnsafeBufferPointer(start: ptr, count: indexCount))
                     
-                    if let name = (mesh as? MDLNamed)?.name, !name.isEmpty {
-                        print("- Name: \(name)")
-                    }
-                }
-                
-                print("\n=== Skeleton Information ===")
-                print("Number of joints: \(joints.count)")
-                
-                if !joints.isEmpty {
-                    print("\nJoint Hierarchy:")
-                    for joint in joints {
-                        let indent = String(repeating: "  ", count: joint.path.components(separatedBy: "/").count - 1)
-                        print("\(indent)- \(joint.name) (ID: \(joint.id))")
-                        if let parentIndex = joint.parentIndex {
-                            print("\(indent)  Parent: \(joints[parentIndex].name) (ID: \(parentIndex))")
-                        }
-                    }
-                }
-                
-                if let asset = asset {
-                    print("\n=== Asset Information ===")
-                    if #available(iOS 11.0, macOS 10.13, *) {
-                        print("Up Axis: \(asset.upAxis)")
-                    }
-                    print("Start Time: \(asset.startTime)")
-                    print("End Time: \(asset.endTime)")
-                    print("Frame Interval: \(asset.frameInterval)")
+                case .uInt16:
+                    let ptr = indexData.assumingMemoryBound(to: UInt16.self)
+                    indices.append(contentsOf: UnsafeBufferPointer(start: ptr, count: indexCount)
+                        .map { UInt32($0) })
+                    
+                case .uInt8:
+                    let ptr = indexData.assumingMemoryBound(to: UInt8.self)
+                    indices.append(contentsOf: UnsafeBufferPointer(start: ptr, count: indexCount)
+                        .map { UInt32($0) })
+                    
+                @unknown default:
+                    continue
                 }
             }
         }
+        
+        guard !vertices.isEmpty, !indices.isEmpty else {
+            return nil
+        }
+        
+        return MeshData(vertices: vertices, indices: indices)
+    }
+    
+    // MARK: - Debug Information
+    public func printModelInfo() {
+        print("\n=== Model Information ===")
+        print("Number of meshes: \(meshes.count)")
+        
+        for (index, mesh) in meshes.enumerated() {
+            print("\nMesh \(index + 1):")
+            print("- Vertex count: \(mesh.vertexCount)")
+            print("- Submesh count: \(mesh.submeshes?.count ?? 0)")
+            
+            if let name = (mesh as? MDLNamed)?.name, !name.isEmpty {
+                print("- Name: \(name)")
+            }
+        }
+        
+        print("\n=== Skeleton Information ===")
+        print("Number of joints: \(joints.count)")
+        
+//        if !joints.isEmpty {
+//            print("\nJoint Hierarchy:")
+//            for joint in joints {
+//                let indent = String(repeating: "  ", count: joint.path.components(separatedBy: "/").count - 1)
+//                print("\(indent)- \(joint.name) (ID: \(joint.id))")
+//                if let parentIndex = joint.parentIndex {
+//                    print("\(indent)  Parent: \(joints[parentIndex].name) (ID: \(parentIndex))")
+//                }
+//            }
+//        }
+        
+        if let asset = asset {
+            print("\n=== Asset Information ===")
+            if #available(iOS 11.0, macOS 10.13, *) {
+                print("Up Axis: \(asset.upAxis)")
+            }
+            print("Start Time: \(asset.startTime)")
+            print("End Time: \(asset.endTime)")
+            print("Frame Interval: \(asset.frameInterval)")
+        }
+    }
+}

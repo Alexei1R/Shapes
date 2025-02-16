@@ -25,6 +25,7 @@ struct ModelUniforms {
     float4x4 modelMatrix;
     float time;
     int hasAnimation;
+    int jointIndex;
 };
 
 vertex VertexOut model_vertex_main(
@@ -79,6 +80,17 @@ vertex VertexOut model_vertex_main(
     out.texCoords = in.texCoords;
     out.jointWeight = 0.0;
     
+    
+    // Get the weight for the selected joint
+        float weight = 0.0;
+        for (int i = 0; i < 4; i++) {
+            if (int(in.jointIndices[i]) == uniforms.jointIndex) {
+                weight = in.jointWeights[i];
+                break;
+            }
+        }
+        out.jointWeight = weight;
+    
     return out;
 }
 
@@ -99,6 +111,11 @@ fragment float4 model_fragment_main(VertexOut in [[stage_in]]) {
     
     // Final color
     float3 result = ambient + diffuse;
+    
+    
+    // Highlight vertices affected by the selected joint
+    float3 jointColor = float3(1.0, 1.0, 0.0); // Red for selected joint
+    result = mix(result, jointColor, in.jointWeight);
     
     return float4(result, 1.0);
 }

@@ -40,6 +40,7 @@ struct ARViewContainer: UIViewRepresentable {
         var character: BodyTrackedEntity?
         let characterOffset: SIMD3<Float> = [0, 0, 0]
         let characterAnchor = AnchorEntity()
+        
         var cancellable: AnyCancellable?
         var handleFrame: (CapturedFrame) -> Void
         
@@ -52,7 +53,7 @@ struct ARViewContainer: UIViewRepresentable {
         func setupARView(_ arView: ARView) {
             arView.scene.addAnchor(characterAnchor)
             
-            cancellable = Entity.loadBodyTrackedAsync(named: "robotAR").sink(
+            cancellable = Entity.loadBodyTrackedAsync(named: "robot").sink(
                 receiveCompletion: { completion in
                     if case let .failure(error) = completion {
                         print("Error: Unable to load model: \(error.localizedDescription)")

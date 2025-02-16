@@ -19,6 +19,8 @@ class Drawable: NSObject, ObservableObject {
     
     // MARK: - Animation and Debug Properties
     @Published var selectedAnimation: CapturedAnimation?
+    @Published var currentJointIndex: Int = 0
+    
     private var customAnimation: CustomAnimation?
     private var circleRenderer: CircleRenderer!
     private var jointMatrices: [mat4f] = []
@@ -32,8 +34,9 @@ class Drawable: NSObject, ObservableObject {
     // MARK: - Transform Properties
     var model: mat4f = mat4f.identity
         .scale(vec3f(0.01))
-        .rotateDegrees(90, axis: .x)
-        .rotateDegrees(180, axis: .y)
+        .translate(vec3f.forward * 0.5)
+//        .rotateDegrees(90, axis: .x)
+//        .rotateDegrees(180, axis: .y)
     
     // MARK: - Uniforms
     struct ModelUniforms {
@@ -41,6 +44,7 @@ class Drawable: NSObject, ObservableObject {
         var modelMatrix: mat4f
         var time: Float
         var hasAnimation: Int32
+        var jointIndex: Int32
     }
     
     private var uniformsBuffer: MetalBuffer<ModelUniforms>!
@@ -93,8 +97,12 @@ class Drawable: NSObject, ObservableObject {
                 let model3D = Model3D()
                 do {
                     try model3D.load(from: modelURL)
+                    model3D.printModelInfo()
                     if let firstMesh = model3D.meshes.first,
-                       let meshData = model3D.extractMeshData(from: firstMesh) {
+                        let meshData = model3D.extractMeshData(from: firstMesh) {
+                        
+                        
+                        
                         vertexBuffer = MetalBuffer<ModelVertex>(
                             device: device,
                             elements: meshData.vertices,
@@ -107,6 +115,7 @@ class Drawable: NSObject, ObservableObject {
                         )
                     }
                     self.modelAsset = model3D
+                
                     print("Model loaded successfully with \(model3D.meshes.count) meshes")
                 } catch {
                     print("Failed to load model: \(error)")
@@ -171,14 +180,7 @@ class Drawable: NSObject, ObservableObject {
         depthStencilState = device.makeDepthStencilState(descriptor: depthStencilDescriptor)
     }
     
-    // MARK: - Animation Matrix Transformation
-    private func transformAnimationMatrices(_ matrices: [mat4f]) -> [mat4f] {
-        return matrices.map { jointMatrix in
-            // Convert joint matrix to model space
-            let modelInv = model.inverse()
-            return model * jointMatrix * modelInv
-        }
-    }
+    
     
     // MARK: - Animation Control
     func setAnimation(_ animation: CapturedAnimation) {
@@ -210,6 +212,18 @@ class Drawable: NSObject, ObservableObject {
     
     func setMovementMode(_ mode: MovementMode) {
         movementMode = mode
+    }
+    
+    
+    func selectNextJoint() {
+        if let model = modelAsset {
+            let maxJoint = model.joints.isEmpty ? 0 : model.joints.count - 1
+            currentJointIndex = min(maxJoint, currentJointIndex + 1)
+        }
+    }
+    
+    func selectPreviousJoint() {
+        currentJointIndex = max(0, currentJointIndex - 1)
     }
 }
 
@@ -253,29 +267,29 @@ extension Drawable: MTKViewDelegate {
         
         // Draw grid
         grid.render(encoder: renderEncoder,
-                   viewProjectionMatrix: camera.getViewProjectionMatrix())
+                    viewProjectionMatrix: camera.getViewProjectionMatrix())
         
         // Update animation and debug circles
-        if let animation = selectedAnimation,
-           let customAnim = customAnimation {
+        if let animation = selectedAnimation, let customAnim = customAnimation {
             jointMatrices = customAnim.update(deltaTime: time.deltaTime)
             
             if !jointMatrices.isEmpty {
-                // Transform and update joint matrices for model animation
-                let transformedMatrices = transformAnimationMatrices(jointMatrices)
-                jointMatricesBuffer?.update(with: transformedMatrices)
+//                jointMatricesBuffer?.update(with: jointMatrices)
                 
                 // Create debug circles using original matrices for visualization
-                let circles: [DebugCircle] = jointMatrices.map { matrix in
+                let circles: [DebugCircle] = jointMatrices.enumerated().map { index, matrix in
                     let position = vec3f(
                         matrix.columns.3.x,
                         matrix.columns.3.y,
                         matrix.columns.3.z
                     )
+                    
+                    let isCurrentJoint = (index == currentJointIndex)
+                    
                     return DebugCircle(
                         position: position,
-                        color: vec4f(1, 0, 0, 1),
-                        radius: 0.01
+                        color: isCurrentJoint ? vec4f(0, 1, 0, 1) : vec4f(1, 0, 0, 1),
+                        radius: isCurrentJoint ? 0.02 : 0.01
                     )
                 }
                 circleRenderer.updateCircles(circles)
@@ -290,7 +304,8 @@ extension Drawable: MTKViewDelegate {
                 viewProjectionMatrix: camera.getViewProjectionMatrix(),
                 modelMatrix: model,
                 time: time.now,
-                hasAnimation: selectedAnimation != nil ? 1 : 0
+                hasAnimation: selectedAnimation != nil ? 1 : 0,
+                jointIndex: Int32(currentJointIndex)
             )
             
             uniformsBuffer = MetalBuffer<ModelUniforms>(

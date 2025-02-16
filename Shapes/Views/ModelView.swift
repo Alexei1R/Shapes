@@ -25,7 +25,6 @@ struct ModelView: View {
                 .edgesIgnoringSafeArea(.all)
                 .handleEvents(using: eventManager)
                 .onAppear {
-//                    drawable.playAnimation(index: 0)
                     isPlaying = true
                     hasStarted = true
                 }
@@ -33,61 +32,33 @@ struct ModelView: View {
             VStack {
                 HStack {
                     VStack(spacing: 4) {
-                        modeButton(
-                            iconName: "record.circle",
-                            color: .red,
-                            action: {
-                                selectedTab = .camera
-                            }
-                        )
-
-                        modeButton(
-                            iconName: "gearshape.fill",
-                            color: .white,
-                            action: {
-                                showingSettings.toggle()
-                            }
-                        )
+                        modeButton(iconName: "record.circle", color: .red) {
+                            selectedTab = .camera
+                        }
+                        modeButton(iconName: "gearshape.fill", color: .white) {
+                            showingSettings.toggle()
+                        }
                         .padding(.bottom, 10)
-
-                        modeButton(
-                            iconName: "arrow.triangle.2.circlepath",
-                            color: .orange,
-                            action: {
-                                drawable.setMovementMode(.rotate)
-                                currentMode = "Rotate Mode"
+                        modeButton(iconName: "arrow.triangle.2.circlepath", color: .orange) {
+                            drawable.setMovementMode(.rotate)
+                            currentMode = "Rotate Mode"
+                        }
+                        modeButton(iconName: "arrow.up.and.down.and.arrow.left.and.right", color: .green) {
+                            drawable.setMovementMode(.moveInPlane)
+                            currentMode = "Translate Mode"
+                        }
+                        modeButton(iconName: isPlaying ? "pause.fill" : "play.fill", color: .blue) {
+                            if isPlaying {
+                                drawable.pauseAnimation()
+                            } else {
+                                drawable.resumeAnimation()
                             }
-                        )
-                        
-                        modeButton(
-                            iconName: "arrow.up.and.down.and.arrow.left.and.right",
-                            color: .green,
-                            action: {
-                                drawable.setMovementMode(.moveInPlane)
-                                currentMode = "Translate Mode"
-                            }
-                        )
-                        
-                        modeButton(
-                            iconName: isPlaying ? "pause.fill" : "play.fill",
-                            color: .blue,
-                            action: {
-                                if isPlaying {
-                                    drawable.pauseAnimation()
-                                } else {
-                                    drawable.resumeAnimation()
-                                }
-                                isPlaying.toggle()
-                            }
-                        )
+                            isPlaying.toggle()
+                        }
                         .padding(.bottom, 10)
-
-                        modeButton(
-                            iconName: "scribble.variable",
-                            color: .cyan) {
-                                showAnimationSelector = true
-                            }
-
+                        modeButton(iconName: "scribble.variable", color: .cyan) {
+                            showAnimationSelector = true
+                        }
                     }
                     .padding(.top, 32)
                     .padding(.leading, 8)
@@ -112,62 +83,44 @@ struct ModelView: View {
             if showingSettings {
                 Color.black.opacity(0.5)
                     .edgesIgnoringSafeArea(.all)
-                    .onTapGesture {
-                        showingSettings = false
-                    }
-                
-                
-                VStack(spacing: 16) {
-                    Text("Joint Controls")
-                        .font(.title2)
-                        .foregroundColor(.white)
-                        .padding(.top, 16)
-                    
-//                    HStack(spacing: 16) {
-//                        Button(action: { drawable.selectPreviousJoint() }) {
-//                            Image(systemName: "chevron.left")
-//                                .font(.system(size: 20))
-//                                .foregroundColor(.yellow)
-//                                .frame(width: 44, height: 44)
-//                                .background(Color.black.opacity(0.6))
-//                                .cornerRadius(12)
-//                        }
-//                        
-//                        Text("Joint \(drawable.currentJointIndex)")
-//                            .foregroundColor(.white)
-//                            .frame(width: 100)
-//                        
-//                        Button(action: { drawable.selectNextJoint() }) {
-//                            Image(systemName: "chevron.right")
-//                                .font(.system(size: 20))
-//                                .foregroundColor(.yellow)
-//                                .frame(width: 44, height: 44)
-//                                .background(Color.black.opacity(0.6))
-//                                .cornerRadius(12)
-//                        }
-//                        
-//
-//                    }
-//                    .padding(.horizontal, 16)
-                    
+                    .onTapGesture { showingSettings = false }
+                VStack {
                     Spacer()
-                    
-//                    Button(action: { drawable.showDebug() }) {
-//                        Image(systemName: "wand.and.rays")
-//                            .font(.system(size: 20))
-//                            .foregroundColor(.purple)
-//                            .frame(width: 44, height: 44)
-//                            .background(Color.black.opacity(0.6))
-//                            .cornerRadius(12)
-//                    }
-
-                    
+                    VStack(spacing: 16) {
+                        Text("Joint Controls")
+                            .font(.title2)
+                            .foregroundColor(.white)
+                            .padding(.top, 16)
+                        HStack(spacing: 16) {
+                            Button(action: { drawable.selectPreviousJoint() }) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(.yellow)
+                                    .frame(width: 44, height: 44)
+                                    .background(Color.black.opacity(0.6))
+                                    .cornerRadius(12)
+                            }
+                            Text("Joint \(drawable.currentJointIndex)")
+                                .foregroundColor(.white)
+                                .frame(width: 100)
+                            Button(action: { drawable.selectNextJoint() }) {
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(.yellow)
+                                    .frame(width: 44, height: 44)
+                                    .background(Color.black.opacity(0.6))
+                                    .cornerRadius(12)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        Spacer()
+                    }
+                    .frame(width: 300, height: 200)
+                    .background(Color.black.opacity(0.5))
+                    .cornerRadius(16)
+                    .shadow(radius: 10)
+                    .padding(.bottom, 20)
                 }
-                .frame(width: 300, height: 200 , alignment: .init(horizontal: .center, vertical: .bottom))
-                .background(Color.black.opacity(0.5))
-                .cornerRadius(16)
-                .shadow(radius: 10)
-                
             }
         }
         .sheet(isPresented: $showAnimationSelector) {
@@ -178,8 +131,6 @@ struct ModelView: View {
                 drawable.setAnimation(animation)
             }
         }
-
-        
     }
     
     private func modeButton(iconName: String, color: Color, action: @escaping () -> Void) -> some View {
