@@ -1,11 +1,14 @@
-//  ContentView.swift
-//  Shapes
-//
-//  Created by rusu alexei on 04.02.2025.
-//
-
 import SwiftUI
 import MetalKit
+import ModelIO
+
+// Extension to allow conversion from simd_float4x4 to NSValue.
+extension NSValue {
+    convenience init(simdMatrix4x4 matrix: simd_float4x4) {
+        var matrixCopy = matrix
+        self.init(bytes: &matrixCopy, objCType: "{matrix_float4x4=16f}")
+    }
+}
 
 struct ModelView: View {
     @StateObject private var eventManager = EventManager.shared
@@ -18,7 +21,15 @@ struct ModelView: View {
     @State private var showAnimationSelector = false
     @State private var selectedAnimation: CapturedAnimation? = nil
     @Binding var selectedTab: TabItem
-
+    
+    private let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        return formatter
+    }()
+    
     var body: some View {
         ZStack {
             ScanView(drawable: drawable)
@@ -31,6 +42,7 @@ struct ModelView: View {
             
             VStack {
                 HStack {
+                    // Left side buttons
                     VStack(spacing: 4) {
                         modeButton(iconName: "record.circle", color: .red) {
                             selectedTab = .camera
@@ -64,12 +76,23 @@ struct ModelView: View {
                     .padding(.leading, 8)
                     
                     Spacer()
+                    
+                    // Export button
+                    VStack {
+                        modeButton(iconName: "arrow.up.circle", color: .blue) {
+                            drawable.printModelJoints()
+                        }
+                        
+                        modeButton(iconName: "repeat.circle.fill", color: .blue) {
+                            drawable.printRecordedJoints()
+                        }
+                    }
+                    .padding(.top, 32)
+                    .padding(.trailing, 8)
                 }
+                
                 Spacer()
-            }
-            
-            VStack {
-                Spacer()
+                
                 Text(currentMode)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.white)
@@ -81,46 +104,7 @@ struct ModelView: View {
             }
             
             if showingSettings {
-                Color.black.opacity(0.5)
-                    .edgesIgnoringSafeArea(.all)
-                    .onTapGesture { showingSettings = false }
-                VStack {
-                    Spacer()
-                    VStack(spacing: 16) {
-                        Text("Joint Controls")
-                            .font(.title2)
-                            .foregroundColor(.white)
-                            .padding(.top, 16)
-                        HStack(spacing: 16) {
-                            Button(action: { drawable.selectPreviousJoint() }) {
-                                Image(systemName: "chevron.left")
-                                    .font(.system(size: 20))
-                                    .foregroundColor(.yellow)
-                                    .frame(width: 44, height: 44)
-                                    .background(Color.black.opacity(0.6))
-                                    .cornerRadius(12)
-                            }
-                            Text("Joint \(drawable.currentJointIndex)")
-                                .foregroundColor(.white)
-                                .frame(width: 100)
-                            Button(action: { drawable.selectNextJoint() }) {
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 20))
-                                    .foregroundColor(.yellow)
-                                    .frame(width: 44, height: 44)
-                                    .background(Color.black.opacity(0.6))
-                                    .cornerRadius(12)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        Spacer()
-                    }
-                    .frame(width: 300, height: 200)
-                    .background(Color.black.opacity(0.5))
-                    .cornerRadius(16)
-                    .shadow(radius: 10)
-                    .padding(.bottom, 20)
-                }
+                settingsView
             }
         }
         .sheet(isPresented: $showAnimationSelector) {
@@ -133,6 +117,57 @@ struct ModelView: View {
         }
     }
     
+    private var settingsView: some View {
+        ZStack {
+            Color.black.opacity(0.5)
+                .edgesIgnoringSafeArea(.all)
+                .onTapGesture { showingSettings = false }
+            
+            VStack {
+                Spacer()
+                VStack(spacing: 16) {
+                    Text("Joint Controls")
+                        .font(.title2)
+                        .foregroundColor(.white)
+                        .padding(.top, 16)
+                    
+                    HStack(spacing: 16) {
+                        Button(action: { drawable.selectPreviousJoint() }) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 20))
+                                .foregroundColor(.yellow)
+                                .frame(width: 44, height: 44)
+                                .background(Color.black.opacity(0.6))
+                                .cornerRadius(12)
+                        }
+                        
+                        Text("Joint \(drawable.currentJointIndex)")
+                            .foregroundColor(.white)
+                            .frame(width: 100)
+                        
+                        Button(action: { drawable.selectNextJoint() }) {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 20))
+                                .foregroundColor(.yellow)
+                                .frame(width: 44, height: 44)
+                                .background(Color.black.opacity(0.6))
+                                .cornerRadius(12)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    Spacer()
+                }
+                .frame(width: 300, height: 200)
+                .background(Color.black.opacity(0.5))
+                .cornerRadius(16)
+                .shadow(radius: 10)
+                .padding(.bottom, 20)
+            }
+        }
+    }
+    
+
+    
     private func modeButton(iconName: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: iconName)
@@ -144,3 +179,4 @@ struct ModelView: View {
         }
     }
 }
+

@@ -72,6 +72,8 @@ struct ARViewContainer: UIViewRepresentable {
             )
         }
         
+        
+        
         func session(_ session: ARSession, didUpdate anchors: [ARAnchor]) {
             for anchor in anchors {
                 guard let bodyAnchor = anchor as? ARBodyAnchor else { continue }
@@ -84,19 +86,19 @@ struct ARViewContainer: UIViewRepresentable {
                 
                 
                 
-                //RECORD ANIMATIONS THAT I WILL SAVE TO THE DISK
-                //                var bodyTransform = bodyAnchor.transform
-                //                var globalJointTransforms: [simd_float4x4] = []
-                //                for jointTransform in bodyAnchor.skeleton.jointModelTransforms {
-                //                    let globalTransform = matrix_multiply(bodyTransform , jointTransform)
-                //                    globalJointTransforms.append(globalTransform)
-                //                }
-                let capturedFrame = CapturedFrame(
-                    id: idFrame,
-                    joints:bodyAnchor.skeleton.jointModelTransforms
-                )
-                handleFrame(capturedFrame)
+                let skeleton = bodyAnchor.skeleton
+                let jointNames = skeleton.definition.jointNames
+                let parentIndices = skeleton.definition.parentIndices
+                var capturedJoints: [CapturedJoint] = []
+                for (index, jointTransform) in skeleton.jointModelTransforms.enumerated() {
+                    let pIndex = parentIndices[index] >= 0 ? parentIndices[index] : nil
+                    capturedJoints.append(CapturedJoint(id: index, name: jointNames[index], path: "", bindTransform: jointTransform, restTransform: jointTransform, parentIndex: pIndex))
+                }
+                let frame = CapturedFrame(id: idFrame, joints: capturedJoints)
+                idFrame += 1
+                handleFrame(frame)
             }
         }
+        
     }
 }

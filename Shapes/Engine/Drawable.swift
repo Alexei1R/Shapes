@@ -6,8 +6,43 @@ enum MovementMode {
     case moveInPlane
 }
 
+let modelToAppleMapping: [Int: Int] = [
+    0: 1, 1: 12, 2: 13, 3: 14, 4: 15, 5: 16,
+    6: 17, 7: 19, 8: 20, 9: 21, 10: 22, 11: 23,
+    12: 24, 13: 25, 14: 26, 15: 27, 16: 28, 17: 29,
+    18: 30, 19: 31, 20: 32, 21: 33, 22: 34, 23: 35,
+    24: 36, 25: 37, 26: 38, 27: 39, 28: 40, 29: 41,
+    30: 42, 31: 43, 32: 44, 33: 45, 34: 46, 35: 47,
+    36: 48, 37: 49, 38: 50, 39: 51, 40: 52, 41: 53,
+    42: 54, 43: 55, 44: 56, 45: 57, 46: 58, 47: 59,
+    48: 60, 49: 61, 50: 62, 51: 63, 52: 64, 53: 65,
+    54: 66, 55: 67, 56: 68, 57: 69, 58: 70, 59: 71,
+    60: 72, 61: 73, 62: 74, 63: 75, 64: 76
+]
+
+func convertAppleToModelMatrix(_ appleMatrix: mat4f) -> mat4f {
+    let correction = mat4f(rows: [
+        SIMD4<Float>(1, 0, 0, 0),
+        SIMD4<Float>(0, -1, 0, 0),
+        SIMD4<Float>(0, 0, -1, 0),
+        SIMD4<Float>(0, 0, 0, 1)
+    ])
+    return correction * appleMatrix
+}
+
+func updateJointMatrices(recordedAppleMatrices: [mat4f], modelBindPoseInverses: [mat4f]) -> [mat4f] {
+    var finalMatrices = Array(repeating: mat4f.identity, count: 65)
+    for modelIndex in 0..<65 {
+        if let appleIndex = modelToAppleMapping[modelIndex] {
+            let appleMatrix = recordedAppleMatrices[appleIndex]
+            let converted = convertAppleToModelMatrix(appleMatrix)
+            finalMatrices[modelIndex] = converted * modelBindPoseInverses[modelIndex]
+        }
+    }
+    return finalMatrices
+}
+
 class Drawable: NSObject, ObservableObject {
-    // MARK: - Core Properties
     let device: MTLDevice
     var commandQueue: MTLCommandQueue!
     var modelPipelineState: MTLRenderPipelineState!
@@ -17,28 +52,22 @@ class Drawable: NSObject, ObservableObject {
     private var renderPassDescriptor: RenderPassDescriptor?
     private var grid: Grid!
     
-    // MARK: - Animation and Debug Properties
     @Published var selectedAnimation: CapturedAnimation?
-    @Published var currentJointIndex: Int = 0
+    @Published var currentJointIndex: Int = 1
     
     private var customAnimation: CustomAnimation?
     private var circleRenderer: CircleRenderer!
     private var jointMatrices: [mat4f] = []
     
-    // MARK: - Model Properties
     private var modelAsset: Model3D?
     private var vertexBuffer: MetalBuffer<ModelVertex>?
     private var indexBuffer: MetalBuffer<UInt32>?
     private var jointMatricesBuffer: MetalBuffer<mat4f>?
     
-    // MARK: - Transform Properties
     var model: mat4f = mat4f.identity
         .scale(vec3f(0.01))
         .translate(vec3f.forward * 0.5)
-//        .rotateDegrees(90, axis: .x)
-//        .rotateDegrees(180, axis: .y)
     
-    // MARK: - Uniforms
     struct ModelUniforms {
         var viewProjectionMatrix: mat4f
         var modelMatrix: mat4f
@@ -50,7 +79,6 @@ class Drawable: NSObject, ObservableObject {
     private var uniformsBuffer: MetalBuffer<ModelUniforms>!
     var movementMode: MovementMode = .rotate
     
-    // MARK: - Initialization
     init(device: MTLDevice) {
         self.device = device
         super.init()
@@ -76,33 +104,25 @@ class Drawable: NSObject, ObservableObject {
         grid = Grid(device: device)
         circleRenderer = CircleRenderer(device: device)
         customAnimation = CustomAnimation()
-        
-        // Initialize joint matrices buffer
         jointMatricesBuffer = MetalBuffer<mat4f>(
             device: device,
             count: 100,
             usage: .storageShared
         )
-        
-        // Initialize with identity matrices
         let identityMatrices = Array(repeating: mat4f.identity, count: 100)
         jointMatricesBuffer?.update(with: identityMatrices)
     }
     
     private func loadModel() {
-        if let modelPath = Bundle.main.path(forResource: "robot", ofType: "usdc") {
+        if let modelPath = Bundle.main.path(forResource: "girl", ofType: "usdc") {
             let modelURL = URL(fileURLWithPath: modelPath)
-            
             if let device = Engine.shared?.device {
                 let model3D = Model3D()
                 do {
                     try model3D.load(from: modelURL)
                     model3D.printModelInfo()
                     if let firstMesh = model3D.meshes.first,
-                        let meshData = model3D.extractMeshData(from: firstMesh) {
-                        
-                        
-                        
+                       let meshData = model3D.extractMeshData(from: firstMesh) {
                         vertexBuffer = MetalBuffer<ModelVertex>(
                             device: device,
                             elements: meshData.vertices,
@@ -115,7 +135,6 @@ class Drawable: NSObject, ObservableObject {
                         )
                     }
                     self.modelAsset = model3D
-                
                     print("Model loaded successfully with \(model3D.meshes.count) meshes")
                 } catch {
                     print("Failed to load model: \(error)")
@@ -127,13 +146,10 @@ class Drawable: NSObject, ObservableObject {
     private func buildPipeline() {
         commandQueue = device.makeCommandQueue()
         let modelPipelineDescriptor = MTLRenderPipelineDescriptor()
-        
-        // Set up shader functions
         let layout = ShaderLayout([
             ShaderElement(type: .vertex, data: "model_vertex_main"),
             ShaderElement(type: .fragment, data: "model_fragment_main")
         ])
-        
         do {
             let shaderHandle = try ShaderManager.shared.loadShader(layout: layout)
             if let shader = ShaderManager.shared.getShader(shaderHandle) {
@@ -143,8 +159,6 @@ class Drawable: NSObject, ObservableObject {
         } catch {
             print("Shader loading error: \(error)")
         }
-        
-        // Set up vertex descriptor
         let vertexLayout = BufferLayout(elements: [
             BufferElement(type: .float3, name: "position"),
             BufferElement(type: .float3, name: "normal"),
@@ -154,12 +168,9 @@ class Drawable: NSObject, ObservableObject {
             BufferElement(type: .uint16x4, name: "jointIndices"),
             BufferElement(type: .float4, name: "jointWeights")
         ])
-        
         modelPipelineDescriptor.vertexDescriptor = vertexLayout.metalVertexDescriptor(bufferIndex: 0)
         modelPipelineDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
         modelPipelineDescriptor.depthAttachmentPixelFormat = .depth32Float
-        
-        // Enable alpha blending
         modelPipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
         modelPipelineDescriptor.colorAttachments[0].rgbBlendOperation = .add
         modelPipelineDescriptor.colorAttachments[0].alphaBlendOperation = .add
@@ -167,22 +178,17 @@ class Drawable: NSObject, ObservableObject {
         modelPipelineDescriptor.colorAttachments[0].sourceAlphaBlendFactor = .sourceAlpha
         modelPipelineDescriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
         modelPipelineDescriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
-        
         do {
             modelPipelineState = try device.makeRenderPipelineState(descriptor: modelPipelineDescriptor)
         } catch {
             fatalError("Failed to create pipeline state: \(error)")
         }
-        
         let depthStencilDescriptor = MTLDepthStencilDescriptor()
         depthStencilDescriptor.depthCompareFunction = .less
         depthStencilDescriptor.isDepthWriteEnabled = true
         depthStencilState = device.makeDepthStencilState(descriptor: depthStencilDescriptor)
     }
     
-    
-    
-    // MARK: - Animation Control
     func setAnimation(_ animation: CapturedAnimation) {
         selectedAnimation = animation
         customAnimation?.play(animation: animation)
@@ -204,7 +210,6 @@ class Drawable: NSObject, ObservableObject {
         selectedAnimation = nil
         jointMatrices.removeAll()
         circleRenderer.updateCircles([])
-        // Reset to identity matrices
         let identityMatrices = Array(repeating: mat4f.identity, count: 100)
         jointMatricesBuffer?.update(with: identityMatrices)
         print("Animation stopped")
@@ -213,7 +218,6 @@ class Drawable: NSObject, ObservableObject {
     func setMovementMode(_ mode: MovementMode) {
         movementMode = mode
     }
-    
     
     func selectNextJoint() {
         if let model = modelAsset {
@@ -225,9 +229,24 @@ class Drawable: NSObject, ObservableObject {
     func selectPreviousJoint() {
         currentJointIndex = max(0, currentJointIndex - 1)
     }
+    
+    func printRecordedJoints() { }
+    
+    func printModelJoints(){
+        print("those ar the model joints")
+        if let model = modelAsset {
+            print("Model joints count \(model.joints.count)")
+            model.printModelJoints()
+        }
+        print(" those ar the recorded joints")
+        if let animation = selectedAnimation, let customAnim = customAnimation {
+            print("Recording apple joints count \(animation.capturedFrames[0].joints.count)")
+            customAnim.printTree()
+        }
+        print("how i can make the conversiont/ use the corect matrices ?")
+    }
 }
 
-// MARK: - MTKViewDelegate
 extension Drawable: MTKViewDelegate {
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
         camera.setAspectRatio(Float(size.width) / Float(size.height))
@@ -242,21 +261,14 @@ extension Drawable: MTKViewDelegate {
         
         time.update()
         
-        // Handle camera controls
         if EventManager.shared.isActive, let event = EventManager.shared.currentEvent {
             switch event.type {
             case .drag:
                 switch movementMode {
                 case .rotate:
-                    camera.orbit(
-                        deltaTheta: Float(event.delta.x) * 0.005,
-                        deltaPhi: Float(event.delta.y) * 0.005
-                    )
+                    camera.orbit(deltaTheta: Float(event.delta.x) * 0.005, deltaPhi: Float(event.delta.y) * 0.005)
                 case .moveInPlane:
-                    camera.moveInPlane(
-                        deltaX: Float(event.delta.x) * 0.01,
-                        deltaY: Float(event.delta.y) * 0.01
-                    )
+                    camera.moveInPlane(deltaX: Float(event.delta.x) * 0.01, deltaY: Float(event.delta.y) * 0.01)
                 }
             case .pinch:
                 camera.zoom(factor: Float(event.scale))
@@ -265,41 +277,25 @@ extension Drawable: MTKViewDelegate {
             }
         }
         
-        // Draw grid
-        grid.render(encoder: renderEncoder,
-                    viewProjectionMatrix: camera.getViewProjectionMatrix())
+        grid.render(encoder: renderEncoder, viewProjectionMatrix: camera.getViewProjectionMatrix())
         
-        // Update animation and debug circles
-        if let animation = selectedAnimation, let customAnim = customAnimation {
-            jointMatrices = customAnim.update(deltaTime: time.deltaTime)
-            
-            if !jointMatrices.isEmpty {
-//                jointMatricesBuffer?.update(with: jointMatrices)
-                
-                // Create debug circles using original matrices for visualization
-                let circles: [DebugCircle] = jointMatrices.enumerated().map { index, matrix in
-                    let position = vec3f(
-                        matrix.columns.3.x,
-                        matrix.columns.3.y,
-                        matrix.columns.3.z
-                    )
-                    
-                    let isCurrentJoint = (index == currentJointIndex)
-                    
-                    return DebugCircle(
-                        position: position,
-                        color: isCurrentJoint ? vec4f(0, 1, 0, 1) : vec4f(1, 0, 0, 1),
-                        radius: isCurrentJoint ? 0.02 : 0.01
-                    )
-                }
-                circleRenderer.updateCircles(circles)
+        if let animation = selectedAnimation,
+           let customAnim = customAnimation,
+           let modelAsset = modelAsset {
+            let recordedMatrices = customAnim.update(deltaTime: time.deltaTime)
+            let bindPoseInverses = modelAsset.jointBindPoseInverses
+            jointMatrices = updateJointMatrices(recordedAppleMatrices: recordedMatrices, modelBindPoseInverses: bindPoseInverses)
+            let circles: [DebugCircle] = jointMatrices.enumerated().map { index, matrix in
+                let position = vec3f(matrix.columns.3.x, matrix.columns.3.y, matrix.columns.3.z)
+                let isCurrentJoint = (index == currentJointIndex)
+                return DebugCircle(position: position, color: isCurrentJoint ? vec4f(0, 1, 0, 1) : vec4f(1, 0, 0, 1), radius: isCurrentJoint ? 0.02 : 0.01)
             }
+            circleRenderer.updateCircles(circles)
+            jointMatricesBuffer?.update(with: jointMatrices)
         }
         
-        // Draw model
         if let vertexBuffer = vertexBuffer,
            let indexBuffer = indexBuffer {
-            
             let modelUniforms = ModelUniforms(
                 viewProjectionMatrix: camera.getViewProjectionMatrix(),
                 modelMatrix: model,
@@ -307,20 +303,12 @@ extension Drawable: MTKViewDelegate {
                 hasAnimation: selectedAnimation != nil ? 1 : 0,
                 jointIndex: Int32(currentJointIndex)
             )
-            
-            uniformsBuffer = MetalBuffer<ModelUniforms>(
-                device: device,
-                element: modelUniforms,
-                usage: .uniforms
-            )
-            
+            uniformsBuffer = MetalBuffer<ModelUniforms>(device: device, element: modelUniforms, usage: .uniforms)
             renderEncoder.setRenderPipelineState(modelPipelineState)
             renderEncoder.setDepthStencilState(depthStencilState)
-            
             uniformsBuffer.bind(to: renderEncoder, type: .vertex, index: 1)
             vertexBuffer.bind(to: renderEncoder, type: .vertex, index: 0)
             jointMatricesBuffer?.bind(to: renderEncoder, type: .vertex, index: 2)
-            
             renderEncoder.drawIndexedPrimitives(
                 type: .triangle,
                 indexCount: indexBuffer.count,
@@ -330,12 +318,7 @@ extension Drawable: MTKViewDelegate {
             )
         }
         
-        // Draw debug circles
-        circleRenderer.render(
-            encoder: renderEncoder,
-            viewProjectionMatrix: camera.getViewProjectionMatrix()
-        )
-        
+        circleRenderer.render(encoder: renderEncoder, viewProjectionMatrix: camera.getViewProjectionMatrix())
         renderEncoder.endEncoding()
         commandBuffer.present(drawableTarget)
         commandBuffer.commit()
@@ -343,27 +326,23 @@ extension Drawable: MTKViewDelegate {
     
     private func setupRenderPass(view: MTKView) -> MTLRenderPassDescriptor? {
         guard let currentDrawable = view.currentDrawable else { return nil }
-        
         let colorAttachment = ColorAttachmentDescriptor(
             texture: currentDrawable.texture,
             loadAction: .clear,
             storeAction: .store,
             clearColor: MTLClearColor(red: 0.1, green: 0.1, blue: 0.1, alpha: 1)
         )
-        
         let depthAttachment = DepthAttachmentDescriptor(
             texture: view.depthStencilTexture,
             loadAction: .clear,
             storeAction: .dontCare,
             clearDepth: 1.0
         )
-        
         let config = RenderPassBuilder()
             .addColorAttachment(colorAttachment)
             .setDepthAttachment(depthAttachment)
             .setSampleCount(view.sampleCount)
             .build()
-        
         renderPassDescriptor = RenderPassDescriptor(config: config)
         return renderPassDescriptor?.getMTLRenderPassDescriptor()
     }

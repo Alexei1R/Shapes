@@ -47,28 +47,22 @@ final class AnimationRecorder: ObservableObject {
     
 }
 
-//struct CapturedFrame: Codable {
-//    var id: Int
-//    var joints: [mat4f]
-//}
-//
-//struct CapturedAnimation: Codable  , Equatable{
-//    var name: String
-//    var capturedFrames: [CapturedFrame]
-//    var duration: Float
-//
-//    static func == (lhs: CapturedAnimation, rhs: CapturedAnimation) -> Bool {
-//        return lhs.name == rhs.name
-//    }
-//}
 
+public struct CapturedJoint : Codable {
+    let id: Int
+    let name: String
+    let path: String
+    let bindTransform: mat4f
+    let restTransform: mat4f
+    let parentIndex: Int?
+}
 
 struct CapturedFrame: Codable {
     var id: Int
-    var joints: [mat4f]
+    var joints: [CapturedJoint]
     var timestamp: TimeInterval
     
-    init(id: Int, joints: [mat4f], timestamp: TimeInterval = Date().timeIntervalSince1970) {
+    init(id: Int, joints: [CapturedJoint], timestamp: TimeInterval = Date().timeIntervalSince1970) {
         self.id = id
         self.joints = joints
         self.timestamp = timestamp
