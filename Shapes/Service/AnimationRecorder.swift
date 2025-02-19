@@ -76,7 +76,7 @@ struct CapturedAnimation: Codable, Equatable {
     var frameRate: Float
     var recordingDate: Date
     
-    init(name: String, capturedFrames: [CapturedFrame], duration: Float, frameRate: Float = 30.0) {
+    init(name: String, capturedFrames: [CapturedFrame], duration: Float, frameRate: Float = 30.0 ) {
         self.name = name
         self.capturedFrames = capturedFrames
         self.duration = duration

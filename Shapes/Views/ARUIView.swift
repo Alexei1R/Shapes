@@ -78,7 +78,7 @@ struct ARViewContainer: UIViewRepresentable {
             for anchor in anchors {
                 guard let bodyAnchor = anchor as? ARBodyAnchor else { continue }
                 let bodyPosition = simd_make_float3(bodyAnchor.transform.columns.3)
-                characterAnchor.position = bodyPosition + characterOffset
+                characterAnchor.position = bodyPosition
                 characterAnchor.orientation = Transform(matrix: bodyAnchor.transform).rotation
                 if let character = character, character.parent == nil {
                     characterAnchor.addChild(character)

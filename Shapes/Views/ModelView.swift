@@ -2,13 +2,6 @@ import SwiftUI
 import MetalKit
 import ModelIO
 
-// Extension to allow conversion from simd_float4x4 to NSValue.
-extension NSValue {
-    convenience init(simdMatrix4x4 matrix: simd_float4x4) {
-        var matrixCopy = matrix
-        self.init(bytes: &matrixCopy, objCType: "{matrix_float4x4=16f}")
-    }
-}
 
 struct ModelView: View {
     @StateObject private var eventManager = EventManager.shared
@@ -22,13 +15,6 @@ struct ModelView: View {
     @State private var selectedAnimation: CapturedAnimation? = nil
     @Binding var selectedTab: TabItem
     
-    private let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        formatter.timeZone = TimeZone(identifier: "UTC")
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        return formatter
-    }()
     
     var body: some View {
         ZStack {
@@ -79,12 +65,12 @@ struct ModelView: View {
                     
                     // Export button
                     VStack {
-                        modeButton(iconName: "arrow.up.circle", color: .blue) {
-                            drawable.printModelJoints()
+                        modeButton(iconName: "square.and.arrow.down.on.square.fill", color: .blue) {
+                            drawable.export()
                         }
                         
                         modeButton(iconName: "repeat.circle.fill", color: .blue) {
-                            drawable.printRecordedJoints()
+                            drawable.printJoints()
                         }
                     }
                     .padding(.top, 32)
@@ -166,7 +152,7 @@ struct ModelView: View {
         }
     }
     
-
+    
     
     private func modeButton(iconName: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {

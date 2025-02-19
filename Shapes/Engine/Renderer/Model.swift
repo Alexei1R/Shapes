@@ -49,15 +49,12 @@ public class Model3D {
     
     private(set) var changeCoordonateSystem: Bool = true
     
-    // Transformation matrix from Blender (right-handed, Z-up) to Metal (left-handed, Y-up)
-    let blenderToMetalMatrix = float4x4(
-        columns: (
-            SIMD4<Float>(1, 0, 0, 0),
-            SIMD4<Float>(0, 0, 1, 0),
-            SIMD4<Float>(0, -1, 0, 0),
-            SIMD4<Float>(0, 0, 0, 1)
-        )
-    )
+    let blenderToMetalMatrix: mat4f = mat4f(columns: (
+        SIMD4<Float>(1, 0, 0, 0),
+        SIMD4<Float>(0, 0, 1, 0),
+        SIMD4<Float>(0, -1, 0, 0),
+        SIMD4<Float>(0, 0, 0, 1)
+    ))
     
     private let vertexDescriptor: MDLVertexDescriptor = {
         let descriptor = MDLVertexDescriptor()
@@ -120,12 +117,9 @@ public class Model3D {
         guard let asset = asset else {
             throw ModelLoaderError.failedToLoadAsset("Failed to load asset")
         }
-        
-        // Set the coordinate system to Y-up for Metal
         if #available(iOS 11.0, macOS 10.13, *) {
             asset.upAxis = vec3f.up
         }
-        
         try loadMeshes()
         try loadSkeleton()
     }
@@ -160,49 +154,29 @@ public class Model3D {
               !jointPaths.isEmpty else {
             throw ModelLoaderError.invalidSkeleton
         }
-        
         var pathToIndex = [String: Int](minimumCapacity: jointPaths.count)
         for (i, path) in jointPaths.enumerated() {
             pathToIndex[path] = i
         }
-        
         joints.removeAll(keepingCapacity: true)
         joints.reserveCapacity(jointPaths.count)
-        
         let bindTransforms = getTransforms(from: firstSkeleton.jointBindTransforms)
         let restTransforms = getTransforms(from: firstSkeleton.jointRestTransforms)
         guard bindTransforms.count == jointPaths.count,
               restTransforms.count == jointPaths.count else {
             throw ModelLoaderError.invalidSkeleton
         }
-        
         for (i, path) in jointPaths.enumerated() {
             let components = path.split(separator: "/").map { String($0) }
             let parentPath = components.dropLast().joined(separator: "/")
             let parentIndex = parentPath.isEmpty ? nil : pathToIndex[parentPath]
             let jointName = components.last ?? ""
-            
             var bindTransform = bindTransforms[i]
             var restTransform = restTransforms[i]
-            
             if changeCoordonateSystem {
-                let bindMatrix = float4x4(bindTransform)
-                let restMatrix = float4x4(restTransform)
-                
-                let transformedBind = blenderToMetalMatrix * bindMatrix
-                let transformedRest = blenderToMetalMatrix * restMatrix
-                
-                bindTransform = mat4f(vec4f(transformedBind.columns.0),
-                                      vec4f(transformedBind.columns.1),
-                                      vec4f(transformedBind.columns.2),
-                                      vec4f(transformedBind.columns.3))
-                
-                restTransform = mat4f(vec4f(transformedRest.columns.0),
-                                      vec4f(transformedRest.columns.1),
-                                      vec4f(transformedRest.columns.2),
-                                      vec4f(transformedRest.columns.3))
+                bindTransform = blenderToMetalMatrix * bindTransform
+                restTransform = blenderToMetalMatrix * restTransform
             }
-            
             joints.append(ModelJoint(id: i,
                                      name: jointName,
                                      path: path,
@@ -214,10 +188,7 @@ public class Model3D {
     
     private func getTransforms(from array: MDLMatrix4x4Array) -> [mat4f] {
         if #available(iOS 11.0, macOS 10.13, *) {
-            return array.float4x4Array.map { mat4f(vec4f($0.columns.0),
-                                                   vec4f($0.columns.1),
-                                                   vec4f($0.columns.2),
-                                                   vec4f($0.columns.3)) }
+            return array.float4x4Array.map { mat4f($0) }
         } else {
             let count = array.elementCount
             return Array(repeating: mat4f.identity, count: count)
@@ -232,12 +203,10 @@ public class Model3D {
         let stride = Int(layout.stride)
         var vertices = [ModelVertex]()
         vertices.reserveCapacity(mesh.vertexCount)
-        
         var attributeMap = [String: (offset: Int, format: MDLVertexFormat)]()
         for attribute in mesh.vertexDescriptor.attributes as? [MDLVertexAttribute] ?? [] {
             attributeMap[attribute.name] = (Int(attribute.offset), attribute.format)
         }
-        
         for i in 0..<mesh.vertexCount {
             let baseAddress = vertexData.advanced(by: i * stride)
             var vertex = ModelVertex(position: .zero,
@@ -247,7 +216,6 @@ public class Model3D {
                                      bitangent: .zero,
                                      jointIndices: SIMD4<UInt16>(0, 0, 0, 0),
                                      jointWeights: vec4f(1, 0, 0, 0))
-            
             if let (offset, _) = attributeMap[MDLVertexAttributePosition] {
                 let pos = baseAddress.advanced(by: offset).assumingMemoryBound(to: vec3f.self).pointee
                 if changeCoordonateSystem {
@@ -257,7 +225,6 @@ public class Model3D {
                     vertex.position = pos
                 }
             }
-            
             if let (offset, _) = attributeMap[MDLVertexAttributeNormal] {
                 let n = baseAddress.advanced(by: offset).assumingMemoryBound(to: vec3f.self).pointee
                 if changeCoordonateSystem {
@@ -267,11 +234,9 @@ public class Model3D {
                     vertex.normal = normalize(n)
                 }
             }
-            
             if let (offset, _) = attributeMap[MDLVertexAttributeTextureCoordinate] {
                 vertex.textureCoordinate = baseAddress.advanced(by: offset).assumingMemoryBound(to: vec2f.self).pointee
             }
-            
             if let (offset, _) = attributeMap[MDLVertexAttributeTangent] {
                 let tan = baseAddress.advanced(by: offset).assumingMemoryBound(to: vec3f.self).pointee
                 if changeCoordonateSystem {
@@ -281,7 +246,6 @@ public class Model3D {
                     vertex.tangent = normalize(tan)
                 }
             }
-            
             if let (offset, _) = attributeMap[MDLVertexAttributeBitangent] {
                 let bitan = baseAddress.advanced(by: offset).assumingMemoryBound(to: vec3f.self).pointee
                 if changeCoordonateSystem {
@@ -291,7 +255,6 @@ public class Model3D {
                     vertex.bitangent = normalize(bitan)
                 }
             }
-            
             if let (offset, _) = attributeMap[MDLVertexAttributeJointIndices] {
                 let indicesPtr = baseAddress.advanced(by: offset).assumingMemoryBound(to: UInt16.self)
                 vertex.jointIndices = SIMD4<UInt16>(indicesPtr[0],
@@ -299,16 +262,13 @@ public class Model3D {
                                                     indicesPtr[2],
                                                     indicesPtr[3])
             }
-            
             if let (offset, _) = attributeMap[MDLVertexAttributeJointWeights] {
                 let weights = baseAddress.advanced(by: offset).assumingMemoryBound(to: vec4f.self).pointee
                 let total = weights.x + weights.y + weights.z + weights.w
                 vertex.jointWeights = total > 0 ? weights / total : vec4f(1, 0, 0, 0)
             }
-            
             vertices.append(vertex)
         }
-        
         var indices = [UInt32]()
         if let submeshes = mesh.submeshes as? [MDLSubmesh] {
             for submesh in submeshes {
@@ -331,7 +291,6 @@ public class Model3D {
                 }
             }
         }
-        
         guard !vertices.isEmpty, !indices.isEmpty else { return nil }
         return MeshData(vertices: vertices, indices: indices)
     }
@@ -363,7 +322,6 @@ public class Model3D {
         print("\n=== Skeleton Information ===")
         print("Number of joints: \(joints.count)")
         if let asset = asset {
-            print("\n=== Asset Information ===")
             if #available(iOS 11.0, macOS 10.13, *) {
                 print("Up Axis: \(asset.upAxis)")
             }
@@ -371,10 +329,5 @@ public class Model3D {
             print("End Time: \(asset.endTime)")
             print("Frame Interval: \(asset.frameInterval)")
         }
-    }
-    
-    // Added computed property to get the inverse of each joint's bind transform
-    public var jointBindPoseInverses: [mat4f] {
-        return joints.map { $0.bindTransform.inverse }
     }
 }

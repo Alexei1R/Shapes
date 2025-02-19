@@ -17,7 +17,6 @@ struct VertexOut {
     float2 texCoords;
     float3 worldPos;
     float jointWeight;
-    float3 debugJoint; 
 };
 
 struct ModelUniforms {
@@ -34,37 +33,18 @@ vertex VertexOut model_vertex_main(
     constant float4x4 *jointMatrices [[buffer(2)]]
 ) {
     VertexOut out;
-    
-    // Initialize skinning matrix with identity
-    float4x4 skinMatrix = float4x4(1.0);
-    float totalWeight = 0.0;
-    
-    // Calculate skinning matrix with weight normalization
-    for(int i = 0; i < 4; i++) {
-        uint jointIndex = in.jointIndices[i];
+    float4x4 skinMatrix = float4x4(0.0);
+    for (int i = 0; i < 4; i++) {
+        uint jointIdx = in.jointIndices[i];
         float weight = in.jointWeights[i];
-        if (weight > 0) {
-            totalWeight += weight;
-            skinMatrix += jointMatrices[jointIndex] * weight;
-        }
+        skinMatrix += jointMatrices[jointIdx] * weight;
     }
     
-    // Normalize weights if needed
-    if (totalWeight > 0) {
-        skinMatrix = skinMatrix / totalWeight;
-    }
-    
-    // Apply skinning transformation in model space
     float4 skinnedPosition = skinMatrix * float4(in.position, 1.0);
-    
-    // Transform to world space
     float4 worldPosition = uniforms.modelMatrix * skinnedPosition;
     out.worldPos = worldPosition.xyz;
-    
-    // Transform to clip space
     out.position = uniforms.viewProjectionMatrix * worldPosition;
     
-    // Transform normal
     float3x3 normalMatrix = float3x3(
         skinMatrix[0].xyz,
         skinMatrix[1].xyz,
@@ -78,43 +58,32 @@ vertex VertexOut model_vertex_main(
     out.normal = normalize(modelNormalMatrix * normalMatrix * in.normal);
     
     out.texCoords = in.texCoords;
-    out.jointWeight = 0.0;
     
-    
-    // Get the weight for the selected joint
-        float weight = 0.0;
-        for (int i = 0; i < 4; i++) {
-            if (int(in.jointIndices[i]) == uniforms.jointIndex) {
-                weight = in.jointWeights[i];
-                break;
-            }
+    float weightForSelected = 0.0;
+    for (int i = 0; i < 4; i++) {
+        if (int(in.jointIndices[i]) == uniforms.jointIndex) {
+            weightForSelected = in.jointWeights[i];
+            break;
         }
-        out.jointWeight = weight;
+    }
+    out.jointWeight = weightForSelected;
     
     return out;
 }
 
 fragment float4 model_fragment_main(VertexOut in [[stage_in]]) {
-    // Light properties
     float3 lightPos = float3(2.0, 5.0, 2.0);
     float3 lightColor = float3(1.0);
     float3 baseColor = float3(0.7, 0.7, 0.8);
     
-    // Ambient
     float3 ambient = baseColor * 0.2;
-    
-    // Diffuse
     float3 normal = normalize(in.normal);
     float3 lightDir = normalize(lightPos - in.worldPos);
     float diff = max(dot(normal, lightDir), 0.0);
     float3 diffuse = baseColor * lightColor * diff;
     
-    // Final color
     float3 result = ambient + diffuse;
-    
-    
-    // Highlight vertices affected by the selected joint
-    float3 jointColor = float3(1.0, 1.0, 0.0); // Red for selected joint
+    float3 jointColor = float3(1.0, 1.0, 0.0);
     result = mix(result, jointColor, in.jointWeight);
     
     return float4(result, 1.0);

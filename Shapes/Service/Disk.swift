@@ -18,4 +18,8 @@ struct Disk {
     var models: URL {
         localRoot.appendingPathComponent("Models", conformingTo: .folder)
     }
+    
+    var animations: URL {
+        localRoot.appendingPathComponent("Animations", conformingTo: .folder)
+    }
 }

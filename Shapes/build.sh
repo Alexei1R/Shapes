@@ -42,7 +42,7 @@ files=(
     "Engine/Renderer/CustomAnimation.swift"
 
     "Views/ARUIView.swift"
-    "Service/AnimationRecorder.swift"
+    # "Service/AnimationRecorder.swift"
 
     # "Engine/Utils/Time.swift"
     "Shaders/ModelShaders.metal"

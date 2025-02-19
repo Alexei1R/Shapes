@@ -15,7 +15,7 @@ class CustomAnimation {
     private var currentTime: TimeInterval = 0.0
     private var lastFrameTime: TimeInterval = 0.0
     private var state: AnimationState = .stopped
-    private var isLooping: Bool = true  // Default to looping
+    private var isLooping: Bool =  false // Default to looping
     
     // Event system properties
     private var eventCallbacks: [AnimationEventCallback] = []
